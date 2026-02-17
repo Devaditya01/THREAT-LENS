@@ -11,7 +11,7 @@ Analyse any URL for phishing, malware, SSL vulnerabilities, and domain threats u
 ├── package.json      ← ESM module config
 ├── README.md
 └── api/
-    └── analyse.js    ← Groq AI serverless function
+    └── analyse.js    ← Cohere AI serverless function
 ```
 ## ✨ Features
 - URL Structure Analysis (scheme, host, path, query)
