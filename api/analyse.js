@@ -6,24 +6,22 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.COHERE_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: 'OPENROUTER_API_KEY not set in Vercel Environment Variables' });
+    return res.status(500).json({ error: 'COHERE_API_KEY not set in Vercel Environment Variables' });
   }
 
   try {
     const { prompt } = req.body;
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch('https://api.cohere.com/v2/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://threatlens.vercel.app',
-        'X-Title': 'ThreatLens'
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.1-8b-instruct:free',
+        model: 'command-r-plus-08-2024',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 1000
       })
@@ -32,10 +30,10 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(response.status).json({ error: data.error?.message || 'OpenRouter API error' });
+      return res.status(response.status).json({ error: data.message || 'Cohere API error' });
     }
 
-    const text = data.choices?.[0]?.message?.content || 'No response generated.';
+    const text = data.message?.content?.[0]?.text || 'No response generated.';
     return res.status(200).json({ text });
 
   } catch (err) {
