@@ -27,6 +27,7 @@ export default async function handler(req, res) {
     );
 
     const data = await response.json();
+
     if (!response.ok) {
       return res.status(response.status).json({ error: data.error?.message || 'Gemini API error' });
     }
@@ -38,24 +39,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
-```
-
----
-
-## File 4 — `README.md` (root)
-Create file → name it `README.md` → paste this:
-```
-# ThreatLens
-AI-Powered URL Intelligence Analyser
-```
-
----
-
-## ✅ After all 4 files are added your repo looks like:
-```
-your-repo/
-├── index.html
-├── vercel.json
-├── README.md
-└── api/
-    └── analyse.js
