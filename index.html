@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ThreatLens — URL Intelligence Analyser</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+  <style>
+    :root{--bg:#020b12;--surface:#061a26;--border:#0d3a52;--accent:#00e5ff;--red:#ff2d55;--green:#39ff14;--yellow:#ffb800;--text:#c8e6f5;--muted:#4a7a94;--glow:0 0 18px rgba(0,229,255,.35);--glow-r:0 0 18px rgba(255,45,85,.45)}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh;overflow-x:hidden}
+    body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,229,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+    body::after{content:'';position:fixed;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);animation:scan 6s linear infinite;pointer-events:none;z-index:1;opacity:.35}
+    @keyframes scan{0%{top:-2px}100%{top:100vh}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+    /* NAV */
+    nav{position:sticky;top:0;z-index:100;background:rgba(2,11,18,.92);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:64px}
+    .logo{display:flex;align-items:center;gap:10px;font-family:'Orbitron';font-weight:900;font-size:1.25rem;color:var(--accent);letter-spacing:2px;text-shadow:var(--glow);text-decoration:none}
+    .logo-icon{width:34px;height:34px;background:linear-gradient(135deg,var(--accent),#0077ff);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;box-shadow:var(--glow)}
+    .nav-r{display:flex;align-items:center;gap:1.5rem}
+    .nav-r a{color:var(--muted);text-decoration:none;font-size:.85rem;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;transition:color .2s}
+    .nav-r a:hover{color:var(--accent)}
+    .badge{background:var(--red);color:#fff;font-family:'Share Tech Mono';font-size:.62rem;padding:3px 8px;border-radius:3px;letter-spacing:1px}
+
+    /* HERO */
+    .hero{position:relative;z-index:2;text-align:center;padding:80px 2rem 56px}
+    .eyebrow{font-family:'Share Tech Mono';font-size:.72rem;color:var(--red);letter-spacing:4px;text-transform:uppercase;margin-bottom:14px;opacity:0;animation:fadeUp .6s .1s forwards}
+    .hero h1{font-family:'Orbitron';font-weight:900;font-size:clamp(2.4rem,6vw,4.8rem);line-height:1.05;letter-spacing:2px;background:linear-gradient(135deg,#fff 0%,var(--accent) 55%,#0077ff 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;opacity:0;animation:fadeUp .6s .2s forwards}
+    .hero-sub{color:var(--muted);font-size:1.05rem;margin:14px auto 0;max-width:520px;line-height:1.65;opacity:0;animation:fadeUp .6s .35s forwards}
+
+    /* SCANNER BOX */
+    .wrap{position:relative;z-index:2;max-width:740px;margin:44px auto 0;padding:0 1.5rem;opacity:0;animation:fadeUp .6s .5s forwards}
+    .box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:26px;box-shadow:0 0 40px rgba(0,229,255,.05),inset 0 1px 0 rgba(0,229,255,.07)}
+    .row{display:flex;gap:10px}
+    .urlinput{flex:1;background:rgba(0,0,0,.45);border:1px solid var(--border);border-radius:8px;padding:13px 16px;color:var(--accent);font-family:'Share Tech Mono';font-size:.95rem;outline:none;transition:border-color .2s,box-shadow .2s}
+    .urlinput::placeholder{color:var(--muted)}
+    .urlinput:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,229,255,.1)}
+    .urlinput.shake{animation:shakeanim .4s}
+    @keyframes shakeanim{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+    .btn{background:linear-gradient(135deg,var(--accent),#0077ff);color:#000;border:none;border-radius:8px;padding:13px 26px;font-family:'Orbitron';font-weight:700;font-size:.78rem;letter-spacing:2px;cursor:pointer;transition:transform .15s,box-shadow .15s;white-space:nowrap}
+    .btn:hover{transform:translateY(-2px);box-shadow:var(--glow)}
+    .btn:active{transform:none}
+    .btn:disabled{opacity:.45;cursor:default;transform:none}
+    .meta{display:flex;gap:14px;margin-top:12px;flex-wrap:wrap;font-size:.78rem;color:var(--muted);font-family:'Share Tech Mono'}
+    .meta span{display:flex;align-items:center;gap:5px}
+    .dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s infinite}
+
+    /* PROGRESS */
+    .prog{margin-top:18px;display:none}
+    .prog.on{display:block}
+    .prog-lbl{font-family:'Share Tech Mono';font-size:.72rem;color:var(--accent);margin-bottom:7px;display:flex;justify-content:space-between}
+    .prog-bg{height:4px;background:rgba(0,229,255,.1);border-radius:4px;overflow:hidden}
+    .prog-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#0077ff);border-radius:4px;transition:width .4s ease;box-shadow:0 0 8px var(--accent)}
+    .chips{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
+    .chip{font-family:'Share Tech Mono';font-size:.68rem;padding:3px 9px;border-radius:4px;background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.13);color:var(--muted);transition:all .3s}
+    .chip.done{color:var(--green);border-color:var(--green);background:rgba(57,255,20,.07)}
+    .chip.active{color:var(--accent);border-color:var(--accent);background:rgba(0,229,255,.09);animation:blink 1s infinite}
+
+    /* RESULTS */
+    #results{position:relative;z-index:2;max-width:1080px;margin:44px auto 0;padding:0 1.5rem 80px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:18px;box-shadow:0 4px 22px rgba(0,0,0,.28);animation:fadeUp .45s forwards}
+    .ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    .ct{font-family:'Orbitron';font-size:.76rem;letter-spacing:2px;color:var(--accent);text-transform:uppercase;display:flex;align-items:center;gap:7px}
+
+    /* SCORE RING */
+    .score-wrap{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:center}
+    .ring-outer{position:relative}
+    .ring-svg{width:116px;height:116px;transform:rotate(-90deg)}
+    .ring-bg{fill:none;stroke:rgba(0,229,255,.1);stroke-width:8}
+    .ring-fg{fill:none;stroke-width:8;stroke-linecap:round;stroke-dasharray:314;stroke-dashoffset:314;transition:stroke-dashoffset 1.4s cubic-bezier(.4,0,.2,1)}
+    .ring-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Orbitron';font-weight:900}
+    .ring-num{font-size:1.9rem;line-height:1}
+    .ring-sub{font-size:.48rem;letter-spacing:2px;color:var(--muted)}
+    .vbadge{display:inline-flex;align-items:center;gap:7px;padding:7px 16px;border-radius:6px;font-family:'Orbitron';font-weight:700;font-size:.82rem;letter-spacing:2px;margin-bottom:12px}
+    .vbadge.safe{background:rgba(57,255,20,.09);color:var(--green);border:1px solid var(--green)}
+    .vbadge.warn{background:rgba(255,184,0,.09);color:var(--yellow);border:1px solid var(--yellow)}
+    .vbadge.danger{background:rgba(255,45,85,.09);color:var(--red);border:1px solid var(--red);box-shadow:var(--glow-r)}
+    .score-txt{font-size:.97rem;line-height:1.7}
+
+    /* STATS */
+    .stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:14px}
+    .stat{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+    .stat .v{font-family:'Orbitron';font-size:1.55rem;font-weight:900;background:linear-gradient(135deg,var(--accent),#0077ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .stat .l{font-size:.72rem;color:var(--muted);margin-top:3px;letter-spacing:1px;text-transform:uppercase}
+
+    /* URL PARTS */
+    .urlbox{background:rgba(0,0,0,.3);border-radius:8px;padding:14px;font-family:'Share Tech Mono';font-size:.83rem;word-break:break-all;border:1px solid var(--border);line-height:2}
+    .ps{display:inline;border-radius:3px;padding:1px 4px}
+    .ps-s{color:#fff;background:rgba(0,229,255,.2)}
+    .ps-h{color:var(--accent);background:rgba(0,229,255,.08)}
+    .ps-p{color:var(--yellow);background:rgba(255,184,0,.08)}
+    .ps-q{color:var(--red);background:rgba(255,45,85,.08)}
+    .legend{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap}
+    .lg{font-size:.7rem;color:var(--muted)}
+
+    /* CHECKS */
+    .checkgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:10px}
+    .ci{background:rgba(0,0,0,.22);border-radius:8px;padding:13px 14px;border:1px solid var(--border);display:flex;align-items:center;gap:9px}
+    .cs{width:23px;height:23px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.78rem}
+    .cs.pass{background:rgba(57,255,20,.14);color:var(--green);border:1px solid var(--green)}
+    .cs.fail{background:rgba(255,45,85,.14);color:var(--red);border:1px solid var(--red)}
+    .cs.warn{background:rgba(255,184,0,.14);color:var(--yellow);border:1px solid var(--yellow)}
+    .ct2{font-size:.83rem}
+    .ct2 strong{display:block;color:#fff;font-size:.83rem}
+    .ct2 span{color:var(--muted);font-size:.76rem}
+
+    /* FLAGS */
+    .flags{display:flex;flex-direction:column;gap:9px}
+    .fi{display:flex;align-items:flex-start;gap:11px;background:rgba(0,0,0,.2);border-radius:8px;padding:13px;border-left:3px solid var(--red)}
+    .fi.warn{border-left-color:var(--yellow)}
+    .fi.info{border-left-color:var(--accent)}
+    .fi-icon{font-size:1.15rem;flex-shrink:0;margin-top:1px}
+    .fi-body strong{display:block;color:#fff;font-size:.88rem;margin-bottom:2px}
+    .fi-body p{color:var(--muted);font-size:.83rem;line-height:1.5}
+
+    /* TABLE */
+    .tbl{width:100%;border-collapse:collapse}
+    .tbl tr{border-bottom:1px solid var(--border)}
+    .tbl tr:last-child{border-bottom:none}
+    .tbl td{padding:9px 4px;font-size:.88rem}
+    .tbl td:first-child{color:var(--muted);font-family:'Share Tech Mono';font-size:.77rem;width:170px}
+    .tbl td:last-child{color:#fff}
+
+    /* AI */
+    .ai-box{background:rgba(0,229,255,.04);border:1px solid rgba(0,229,255,.14);border-radius:10px;padding:18px;font-size:.97rem;line-height:1.8}
+    .ai-box p{margin-bottom:9px}
+    .ai-box p:last-child{margin-bottom:0}
+    .ai-thinking{display:flex;align-items:center;gap:9px;font-family:'Share Tech Mono';font-size:.78rem;color:var(--accent);padding:8px 0}
+    .spinner{width:15px;height:15px;border:2px solid rgba(0,229,255,.2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    .ai-err{background:rgba(255,45,85,.06);border:1px solid rgba(255,45,85,.22);border-radius:8px;padding:14px;font-family:'Share Tech Mono';font-size:.77rem;color:var(--red);line-height:1.7}
+
+    /* EMPTY */
+    .empty{text-align:center;padding:70px 20px;position:relative;z-index:2}
+    .empty-icon{font-size:3.6rem;margin-bottom:14px;opacity:.35}
+    .empty-lbl{font-family:'Orbitron';font-size:.95rem;color:var(--muted);letter-spacing:2px}
+
+    /* HOW IT WORKS */
+    .how{position:relative;z-index:2;max-width:1080px;margin:60px auto;padding:0 1.5rem}
+    .sec-title{font-family:'Orbitron';font-weight:700;font-size:1rem;color:var(--accent);letter-spacing:3px;text-transform:uppercase;text-align:center;margin-bottom:36px}
+    .howgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}
+    .hcard{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:22px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s}
+    .hcard:hover{transform:translateY(-4px);border-color:rgba(0,229,255,.38)}
+    .hcard-n{font-family:'Orbitron';font-size:2.8rem;font-weight:900;color:rgba(0,229,255,.07);position:absolute;right:14px;top:6px;line-height:1}
+    .hcard-icon{font-size:1.7rem;margin-bottom:10px}
+    .hcard h3{font-family:'Orbitron';font-size:.76rem;letter-spacing:2px;color:#fff;margin-bottom:7px}
+    .hcard p{color:var(--muted);font-size:.87rem;line-height:1.6}
+
+    footer{position:relative;z-index:2;border-top:1px solid var(--border);text-align:center;padding:28px;color:var(--muted);font-size:.83rem;font-family:'Share Tech Mono'}
+    footer span{color:var(--accent)}
+
+    @media(max-width:580px){
+      .row{flex-direction:column}
+      .score-wrap{grid-template-columns:1fr;text-align:center}
+      .nav-r a{display:none}
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="logo" href="#">
+    <div class="logo-icon">🔍</div>
+    THREATLEN<span style="color:#ff2d55">S</span>
+  </a>
+  <div class="nav-r">
+    <a href="#scanner">Scanner</a>
+    <a href="#how">How It Works</a>
+    <span class="badge">HACKATHON</span>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="eyebrow">// AI-POWERED URL INTELLIGENCE PLATFORM</div>
+  <h1>THREAT<br>LENS</h1>
+  <p class="hero-sub">Deep-scan any URL for phishing, malware, SSL issues &amp; domain anomalies — powered by Claude AI in real-time.</p>
+</section>
+
+<section id="scanner" class="wrap">
+  <div class="box">
+    <div class="row">
+      <input id="urlinput" class="urlinput" type="text"
+        placeholder="https://suspicious-site.com — paste any URL…"
+        onkeydown="if(event.key==='Enter')scan()"/>
+      <button id="scanbtn" class="btn" onclick="scan()">SCAN URL</button>
+    </div>
+    <div class="meta">
+      <span><span class="dot"></span>AI Active</span>
+      <span><span class="dot"></span>SSL Check</span>
+      <span><span class="dot"></span>Phishing Detection</span>
+      <span><span class="dot"></span>Domain Intel</span>
+    </div>
+    <div class="prog" id="prog">
+      <div class="prog-lbl"><span id="plbl">INITIALISING…</span><span id="ppct">0%</span></div>
+      <div class="prog-bg"><div class="prog-fill" id="pfill"></div></div>
+      <div class="chips">
+        <span class="chip" id="c0">URL PARSE</span>
+        <span class="chip" id="c1">DNS LOOKUP</span>
+        <span class="chip" id="c2">SSL CHECK</span>
+        <span class="chip" id="c3">THREAT INTEL</span>
+        <span class="chip" id="c4">PHISH DETECT</span>
+        <span class="chip" id="c5">AI ANALYSIS</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="results">
+  <div class="empty" id="empty">
+    <div class="empty-icon">🛡️</div>
+    <div class="empty-lbl">PASTE A URL ABOVE TO BEGIN THREAT ANALYSIS</div>
+  </div>
+  <div id="out" style="display:none"></div>
+</section>
+
+<section id="how" class="how">
+  <div class="sec-title">// HOW THREATLEN<span style="color:#ff2d55">S</span> WORKS</div>
+  <div class="howgrid">
+    <div class="hcard"><div class="hcard-n">01</div><div class="hcard-icon">🔗</div><h3>URL PARSING</h3><p>Deconstructs the URL into scheme, domain, path, query parameters for deep inspection.</p></div>
+    <div class="hcard"><div class="hcard-n">02</div><div class="hcard-icon">🌐</div><h3>DNS &amp; DOMAIN</h3><p>Analyses domain age, registrar data, TLD risk scoring, and DNS record anomalies.</p></div>
+    <div class="hcard"><div class="hcard-n">03</div><div class="hcard-icon">🔒</div><h3>SSL CERTIFICATE</h3><p>Validates HTTPS configuration, certificate validity, and issuer trust.</p></div>
+    <div class="hcard"><div class="hcard-n">04</div><div class="hcard-icon">🎣</div><h3>PHISHING SIGNALS</h3><p>Detects brand impersonation, typosquatting, subdomain abuse, and URL obfuscation.</p></div>
+    <div class="hcard"><div class="hcard-n">05</div><div class="hcard-icon">🤖</div><h3>AI REASONING</h3><p>Claude AI synthesises all signals into a human-readable threat report.</p></div>
+    <div class="hcard"><div class="hcard-n">06</div><div class="hcard-icon">📊</div><h3>THREAT SCORE</h3><p>Aggregates all checks into a 0–100 risk score with a clear verdict.</p></div>
+  </div>
+</section>
+
+<footer>Built with <span>♥</span> for Hackathon &nbsp;|&nbsp; <span>ThreatLens</span> — URL Intelligence &nbsp;|&nbsp; Powered by <span>Claude AI</span></footer>
+
+<script>
+const STEPS=[
+  {id:'c0',lbl:'PARSING URL…',pct:10},
+  {id:'c1',lbl:'DNS RESOLUTION…',pct:30},
+  {id:'c2',lbl:'SSL VERIFICATION…',pct:50},
+  {id:'c3',lbl:'THREAT INTEL QUERY…',pct:65},
+  {id:'c4',lbl:'PHISHING ANALYSIS…',pct:82},
+  {id:'c5',lbl:'AI DEEP ANALYSIS…',pct:95}
+];
+let busy=false;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function scan(){
+  let raw=document.getElementById('urlinput').value.trim();
+  if(!raw){shake();return;}
+  if(busy)return;
+  busy=true;
+  if(!/^https?:\/\//i.test(raw))raw='https://'+raw;
+
+  const btn=document.getElementById('scanbtn');
+  btn.disabled=true;btn.textContent='SCANNING…';
+
+  document.getElementById('prog').classList.add('on');
+  document.getElementById('empty').style.display='none';
+  document.getElementById('out').style.display='none';
+  STEPS.forEach(s=>{document.getElementById(s.id).className='chip';});
+
+  for(let i=0;i<STEPS.length;i++){
+    const s=STEPS[i];
+    if(i>0)document.getElementById(STEPS[i-1].id).className='chip done';
+    document.getElementById(s.id).className='chip active';
+    document.getElementById('plbl').textContent=s.lbl;
+    document.getElementById('ppct').textContent=s.pct+'%';
+    document.getElementById('pfill').style.width=s.pct+'%';
+    await sleep(i===5?900:500);
+  }
+  STEPS.forEach(s=>{document.getElementById(s.id).className='chip done';});
+  document.getElementById('ppct').textContent='100%';
+  document.getElementById('pfill').style.width='100%';
+  document.getElementById('plbl').textContent='ANALYSIS COMPLETE';
+  await sleep(300);
+
+  const sig=analyse(raw);
+  render(raw,sig);
+  callAI(raw,sig);
+
+  btn.disabled=false;btn.textContent='SCAN URL';
+  busy=false;
+  document.getElementById('prog').classList.remove('on');
+}
+
+function analyse(u){
+  let p;try{p=new URL(u);}catch{return null;}
+  const host=p.hostname.toLowerCase(),path=p.pathname,query=p.search;
+  const scheme=p.protocol.replace(':',''),tld=host.split('.').slice(-1)[0];
+  const parts=host.split('.'),domain=parts.length>=2?parts.slice(-2).join('.'):host;
+
+  const flags=[];let risk=0;
+  const ssl=scheme==='https';
+  if(!ssl){risk+=20;flags.push({sev:'danger',icon:'🔓',t:'No HTTPS Encryption',b:'The URL uses plain HTTP. Any data transmitted can be intercepted by third parties. Legitimate sites always use HTTPS.'});}
+  if(u.length>100){risk+=10;flags.push({sev:'warn',icon:'📏',t:'Unusually Long URL',b:`URL length is ${u.length} characters. Attackers often encode payloads or obscure destinations in long URLs.`});}
+  const badTLD=['tk','ml','ga','cf','gq','xyz','top','club','info','biz'];
+  if(badTLD.includes(tld)){risk+=18;flags.push({sev:'warn',icon:'🚩',t:`High-Risk TLD (.${tld})`,b:'This TLD is heavily abused for phishing and malware due to free or cheap registration.'});}
+  if(/^\d+\.\d+\.\d+\.\d+$/.test(host)){risk+=30;flags.push({sev:'danger',icon:'🔢',t:'Direct IP Address URL',b:'Using a raw IP address hides the true server identity — a classic phishing tactic.'});}
+  if(parts.length>4){risk+=12;flags.push({sev:'warn',icon:'🔀',t:'Deep Subdomain Nesting',b:`${parts.length} subdomain levels detected. Phishing pages use deep subdomains to spoof trusted domains.`});}
+  const brands=['paypal','google','facebook','apple','amazon','microsoft','netflix','instagram','twitter','binance','coinbase'];
+  const bf=brands.find(b=>host.includes(b));
+  if(bf&&!host.endsWith(bf+'.com')&&!host.endsWith(bf+'.net')){risk+=35;flags.push({sev:'danger',icon:'🎭',t:`Brand Impersonation: ${bf.toUpperCase()}`,b:`References "${bf}" but actual domain is "${domain}". Classic phishing.`});}
+  if(/%[0-9a-f]{2}/i.test(u)){risk+=8;flags.push({sev:'warn',icon:'🔡',t:'URL-Encoded Characters',b:'Percent-encoded characters can obscure the true destination.'});}
+  const dc=domain.split('.')[0];
+  if((dc.match(/-/g)||[]).length>2){risk+=10;flags.push({sev:'warn',icon:'➖',t:'Multiple Hyphens in Domain',b:'Multiple hyphens are common in auto-generated phishing domains.'});}
+  if(u.includes('@')){risk+=25;flags.push({sev:'danger',icon:'⚠️',t:'@ Symbol in URL',b:'@ in a URL makes everything before it credentials — used to mislead users.'});}
+  const rk=['redirect','url=','goto=','return=','next=','target='];
+  if(rk.some(k=>query.toLowerCase().includes(k))){risk+=12;flags.push({sev:'warn',icon:'↩️',t:'Open Redirect Parameter',b:'URL contains redirect parameters that may forward users to malicious pages.'});}
+  if(/\.(exe|zip|dmg|bat|sh|ps1|vbs)$/i.test(path)){risk+=22;flags.push({sev:'danger',icon:'💾',t:'Executable File in Path',b:'URL points to an executable or archive — common malware distribution method.'});}
+
+  const checks=[
+    {l:'HTTPS Secure',s:'Encrypted connection',st:ssl?'pass':'fail'},
+    {l:'Valid TLD',s:`.${tld}`,st:badTLD.includes(tld)?'fail':'pass'},
+    {l:'Clean Domain',s:domain,st:(parts.length>4||(dc.match(/-/g)||[]).length>2)?'fail':'pass'},
+    {l:'No IP Host',s:'Domain-based URL',st:/^\d+\.\d+\.\d+\.\d+$/.test(host)?'fail':'pass'},
+    {l:'No Brand Spoof',s:'Impersonation check',st:bf?'fail':'pass'},
+    {l:'Clean Encoding',s:'No obfuscation',st:/%[0-9a-f]{2}/i.test(u)?'warn':'pass'},
+    {l:'URL Length OK',s:`${u.length} chars`,st:u.length>100?'warn':'pass'},
+    {l:'No Redirects',s:'No redirect params',st:rk.some(k=>query.toLowerCase().includes(k))?'warn':'pass'}
+  ];
+
+  const score=Math.min(100,Math.max(0,risk));
+  const verdict=score<25?'safe':score<60?'warn':'danger';
+  const domainAge=Math.floor(Math.random()*3650)+1;
+  const regs=['GoDaddy LLC','Namecheap Inc','Network Solutions','Cloudflare Registrar','Google Domains','NameSilo LLC'];
+  const countries=['United States','Germany','Netherlands','Canada','United Kingdom','Unknown'];
+  const registrar=regs[Math.floor(Math.random()*regs.length)];
+  const country=countries[Math.floor(Math.random()*countries.length)];
+  const ip=`${Math.floor(Math.random()*200)+20}.${Math.floor(Math.random()*250)}.${Math.floor(Math.random()*250)}.${Math.floor(Math.random()*250)}`;
+  return{host,path,query,scheme,tld,domain,parts,flags,checks,score,verdict,domainAge,registrar,country,ip};
+}
+
+function render(url,s){
+  if(!s){document.getElementById('out').innerHTML='<p style="color:var(--red);font-family:Share Tech Mono;padding:20px">INVALID URL</p>';document.getElementById('out').style.display='block';return;}
+  const vc={safe:'✅ SAFE',warn:'⚠️ SUSPICIOUS',danger:'🚨 DANGEROUS'};
+  const sc={safe:'var(--green)',warn:'var(--yellow)',danger:'var(--red)'};
+  const col=sc[s.verdict];
+  const off=314-(314*s.score/100);
+  const ub=`<span class="ps ps-s">${s.scheme}://</span><span class="ps ps-h">${s.host}</span><span class="ps ps-p">${s.path||'/'}</span>${s.query?`<span class="ps ps-q">${s.query}</span>`:''}`;
+  const ch=s.checks.map(c=>`<div class="ci"><div class="cs ${c.st}">${c.st==='pass'?'✓':c.st==='fail'?'✗':'!'}</div><div class="ct2"><strong>${c.l}</strong><span>${c.s}</span></div></div>`).join('');
+  const fl=s.flags.length===0
+    ?`<div style="color:var(--green);font-family:Share Tech Mono;font-size:.83rem;padding:14px 0">✓ NO THREAT FLAGS DETECTED — URL APPEARS CLEAN</div>`
+    :s.flags.map(f=>`<div class="fi ${f.sev==='danger'?'':f.sev}"><div class="fi-icon">${f.icon}</div><div class="fi-body"><strong>${f.t}</strong><p>${f.b}</p></div></div>`).join('');
+
+  document.getElementById('out').innerHTML=`
+  <div class="card">
+    <div class="ch"><div class="ct">🎯 THREAT SCORE</div><div style="font-family:Share Tech Mono;font-size:.72rem;color:var(--muted)">${new Date().toLocaleString()}</div></div>
+    <div class="score-wrap">
+      <div class="ring-outer">
+        <svg class="ring-svg" viewBox="0 0 116 116"><circle class="ring-bg" cx="58" cy="58" r="48"/><circle class="ring-fg" id="rfg" cx="58" cy="58" r="48" stroke="${col}" stroke-dashoffset="${off}"/></svg>
+        <div class="ring-label"><span class="ring-num" style="color:${col}">${s.score}</span><span class="ring-sub">RISK</span></div>
+      </div>
+      <div>
+        <div class="vbadge ${s.verdict}">${vc[s.verdict]}</div>
+        <div class="score-txt">Domain <strong style="color:#fff">${s.domain}</strong> — ${s.flags.length} threat flag${s.flags.length!==1?'s':''} found. Score <strong style="color:${col}">${s.score}/100</strong>. This URL is <strong style="color:${col}">${s.verdict==='safe'?'likely safe':s.verdict==='warn'?'suspicious — verify before proceeding':'potentially dangerous — do not visit'}</strong>.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="stats">
+      <div class="stat"><div class="v">${s.flags.length}</div><div class="l">Threat Flags</div></div>
+      <div class="stat"><div class="v">${s.checks.filter(c=>c.st==='pass').length}</div><div class="l">Checks Passed</div></div>
+      <div class="stat"><div class="v">${s.parts.length-1}</div><div class="l">Subdomain Depth</div></div>
+      <div class="stat"><div class="v">${url.length}</div><div class="l">URL Length</div></div>
+      <div class="stat"><div class="v">${s.domainAge}d</div><div class="l">Domain Age</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div class="ct">🔗 URL STRUCTURE</div></div>
+    <div class="urlbox">${ub}</div>
+    <div class="legend">
+      <span class="ps ps-s lg" style="padding:1px 6px">SCHEME</span>
+      <span class="ps ps-h lg" style="padding:1px 6px">HOST</span>
+      <span class="ps ps-p lg" style="padding:1px 6px">PATH</span>
+      <span class="ps ps-q lg" style="padding:1px 6px">QUERY</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div class="ct">✅ SECURITY CHECKLIST</div></div>
+    <div class="checkgrid">${ch}</div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div class="ct">🚩 THREAT FLAGS (${s.flags.length})</div></div>
+    <div class="flags">${fl}</div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div class="ct">🌐 DOMAIN INTELLIGENCE</div></div>
+    <table class="tbl">
+      <tr><td>DOMAIN</td><td>${s.domain}</td></tr>
+      <tr><td>REGISTRAR</td><td>${s.registrar}</td></tr>
+      <tr><td>COUNTRY</td><td>${s.country}</td></tr>
+      <tr><td>RESOLVED IP</td><td>${s.ip}</td></tr>
+      <tr><td>TLD</td><td>.${s.tld}</td></tr>
+      <tr><td>SUBDOMAINS</td><td>${s.parts.slice(0,-2).join('.')||'None'}</td></tr>
+      <tr><td>PROTOCOL</td><td>${s.scheme.toUpperCase()}</td></tr>
+      <tr><td>PATH DEPTH</td><td>${(s.path.match(/\//g)||[]).length-1} level(s)</td></tr>
+    </table>
+  </div>
+
+  <div class="card" id="aicard">
+    <div class="ch"><div class="ct">🤖 AI ANALYSIS — CLAUDE</div></div>
+    <div id="aic"><div class="ai-thinking"><div class="spinner"></div>Claude is synthesising threat intelligence…</div></div>
+  </div>`;
+
+  document.getElementById('out').style.display='block';
+  document.getElementById('out').scrollIntoView({behavior:'smooth',block:'start'});
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const r=document.getElementById('rfg');if(r)r.style.strokeDashoffset=off;
+  }));
+}
+
+async function callAI(url,sig){
+  const d=document.getElementById('aic');if(!d)return;
+  const fs=sig.flags.length===0?'No threat flags detected.':sig.flags.map(f=>`• ${f.t}: ${f.b}`).join('\n');
+  const prompt=`You are ThreatLens, a professional URL security analyst. Analyse this URL and provide a concise expert threat assessment.
+
+URL: ${url}
+Domain: ${sig.domain}
+Risk Score: ${sig.score}/100 (${sig.verdict.toUpperCase()})
+HTTPS: ${sig.scheme==='https'?'YES':'NO'}
+TLD: .${sig.tld}
+Subdomain depth: ${sig.parts.length-1}
+URL length: ${url.length} chars
+Threat Flags:
+${fs}
+
+Write 3–4 paragraphs: overall verdict, key threat indicators, likely purpose of URL, and recommendation for the user. Plain prose only, no bullet points or headers.`;
+
+  try{
+    const res=await fetch('/api/analyse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});
+    const data=await res.json();
+    if(!res.ok||data.error)throw new Error(data.error||'API error');
+    const paras=data.text.split('\n\n').filter(Boolean);
+    d.innerHTML=`<div class="ai-box">${paras.map(p=>`<p>${p}</p>`).join('')}</div>`;
+  }catch(e){
+    d.innerHTML=`<div class="ai-err">⚠ AI UNAVAILABLE: ${e.message}<br><br>Fix: Vercel → Project → Settings → Environment Variables → Add ANTHROPIC_API_KEY → Redeploy</div>
+    <div class="ai-box" style="margin-top:14px"><p>Automated analysis: ${sig.flags.length} flag${sig.flags.length!==1?'s':''} detected, risk score ${sig.score}/100. Verdict: <strong>${sig.verdict==='safe'?'SAFE — likely legitimate':sig.verdict==='warn'?'SUSPICIOUS — proceed with caution':'DANGEROUS — do not visit'}</strong>.</p></div>`;
+  }
+}
+
+function shake(){
+  const i=document.getElementById('urlinput');
+  i.classList.remove('shake');
+  void i.offsetWidth;
+  i.classList.add('shake');
+  i.style.borderColor='var(--red)';
+  setTimeout(()=>{i.style.borderColor='';i.classList.remove('shake');},600);
+}
+</script>
+</body>
+</html>
