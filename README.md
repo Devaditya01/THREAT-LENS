@@ -42,62 +42,7 @@ Think of it like a restaurant:
 
 ---
 
-## 🚀 How to Deploy on Vercel (Step by Step)
 
-### Step 1 — Get a free Cohere API key
-1. Go to [cohere.com](https://cohere.com) and sign up (free)
-2. Go to **API Keys** in your dashboard
-3. Click **"New Trial Key"** and copy it — looks like: `abc123xyz...`
-
-### Step 2 — Upload to GitHub
-1. Go to [github.com](https://github.com) and create a free account
-2. Click the **+** button → **New repository**
-3. Name it `threatlens`, make it **Public**, click **Create**
-4. Upload all these files (drag & drop in the browser works!)
-
-### Step 3 — Deploy on Vercel
-1. Go to [vercel.com](https://vercel.com) and sign up with your GitHub account
-2. Click **"Add New Project"**
-3. Select your `threatlens` GitHub repository
-4. Click **"Deploy"** — Vercel will build it automatically!
-
-### Step 4 — Add your API Key (IMPORTANT!)
-After deploying:
-1. Go to your project in Vercel
-2. Click **Settings** → **Environment Variables**
-3. Click **"Add"**
-4. Name: `COHERE_API_KEY`
-5. Value: (paste your Cohere key here)
-6. Click **Save**
-7. Go to **Deployments** → click the three dots on the latest deployment → **Redeploy**
-
-✅ **Done! Your site is now live with AI analysis working.**
-
----
-
-## 🛠️ How to Test Locally (On Your Computer)
-
-### You need Node.js installed first
-Download from [nodejs.org](https://nodejs.org) (LTS version)
-
-### Then run these commands in your terminal:
-```bash
-# 1. Go into the project folder
-cd threatlens
-
-# 2. Install the Vercel tool
-npm install
-
-# 3. Create a .env.local file for your API key (only for local testing)
-echo "COHERE_API_KEY=your_key_here" > .env.local
-
-# 4. Start the local development server
-npm run dev
-
-# 5. Open http://localhost:3000 in your browser
-```
-
----
 
 ## 🔑 Environment Variables
 
