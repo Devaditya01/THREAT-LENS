@@ -9,7 +9,7 @@ A cybersecurity tool that scans URLs for threats and gives AI-powered analysis.
 ```
 threatlens/
 │
-├── public/
+├──
 │   └── index.html        ← The FRONTEND (what users see in the browser)
 │
 ├── api/
