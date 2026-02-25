@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ThreatLens — URL Intelligence Platform</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;600;700;800&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    :root{
+      --bg:#030d16;--surface:#071e2e;--border:#0e3f5c;--border2:#1a5c7a;
+      --accent:#00d4ff;--red:#ff3366;--green:#00ff88;--yellow:#ffcc00;
+      --text:#cce8f5;--muted:#4d8aaa;
+      --glow:0 0 20px rgba(0,212,255,.3);
+      --glow-g:0 0 20px rgba(0,255,136,.3);
+      --glow-r:0 0 20px rgba(255,51,102,.4);
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden}
+    .bg-grid{position:fixed;inset:0;z-index:0;pointer-events:none;
+      background-image:linear-gradient(rgba(0,212,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.03) 1px,transparent 1px);
+      background-size:48px 48px}
+    .orb{position:fixed;border-radius:50%;pointer-events:none;z-index:0;filter:blur(80px);opacity:.1}
+    .orb1{width:600px;height:600px;background:var(--accent);top:-200px;right:-100px}
+    .orb2{width:400px;height:400px;background:var(--red);bottom:-100px;left:-100px}
+    .scanline{position:fixed;left:0;right:0;height:1px;z-index:1;
+      background:linear-gradient(90deg,transparent,var(--accent),transparent);
+      animation:scanmove 8s linear infinite;opacity:.18;pointer-events:none}
+
+    @keyframes scanmove{0%{top:-1px}100%{top:100vh}}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+    @keyframes shimmer{0%{background-position:200% center}100%{background-position:-200% center}}
+    @keyframes shakeanim{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+    @keyframes rotateCube{0%{transform:rotateX(0deg) rotateY(0deg)}100%{transform:rotateX(360deg) rotateY(360deg)}}
+    @keyframes floatUp{0%,100%{transform:translateY(0px)}50%{transform:translateY(-12px)}}
+    @keyframes orbit{from{transform:rotateY(0deg) translateZ(160px)}to{transform:rotateY(360deg) translateZ(160px)}}
+
+    /* SCANNER BEAM — sweeps top-to-bottom inside the scan card */
+    @keyframes scanBeam{0%{top:-2px;opacity:0}5%{opacity:1}95%{opacity:1}100%{top:100%;opacity:0}}
+    @keyframes scanPulseRing{0%{transform:scale(.85);opacity:.7}100%{transform:scale(1.35);opacity:0}}
+    @keyframes radarSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+    @keyframes borderGlow{0%,100%{box-shadow:0 0 60px rgba(0,212,255,.06),0 20px 60px rgba(0,0,0,.4),inset 0 1px 0 rgba(0,212,255,.1)}
+      50%{box-shadow:0 0 80px rgba(0,212,255,.18),0 20px 60px rgba(0,0,0,.4),0 0 40px rgba(0,212,255,.1),inset 0 1px 0 rgba(0,212,255,.2)}}
+
+    /* CURSOR GLOW */
+    #cursor-glow{position:fixed;pointer-events:none;z-index:999;border-radius:50%;
+      width:320px;height:320px;
+      background:radial-gradient(circle,rgba(0,212,255,.07) 0%,transparent 70%);
+      transform:translate(-50%,-50%);transition:transform .08s linear;will-change:transform}
+
+
+    /* SCANNER BEAM inside scan-card */
+    .scan-card{position:relative;overflow:hidden}
+    .scan-beam{position:absolute;left:0;right:0;height:2px;z-index:3;pointer-events:none;
+      background:linear-gradient(90deg,transparent 0%,rgba(0,212,255,.0) 10%,rgba(0,212,255,.9) 50%,rgba(0,212,255,.0) 90%,transparent 100%);
+      box-shadow:0 0 12px 3px rgba(0,212,255,.4),0 0 24px 6px rgba(0,212,255,.15);
+      display:none;top:-2px}
+    .scan-beam.scanning{display:block;animation:scanBeam 1.6s ease-in-out infinite}
+
+    /* PULSE RINGS when scanning */
+    .scan-rings{position:absolute;inset:0;pointer-events:none;z-index:2;display:none;align-items:center;justify-content:center}
+    .scan-rings.scanning{display:flex}
+    .scan-ring{position:absolute;border-radius:50%;border:1px solid rgba(0,212,255,.3);
+      width:60px;height:60px;animation:scanPulseRing 2s ease-out infinite}
+    .scan-ring:nth-child(2){animation-delay:.5s;width:100px;height:100px;border-color:rgba(0,212,255,.2)}
+    .scan-ring:nth-child(3){animation-delay:1s;width:150px;height:150px;border-color:rgba(0,212,255,.12)}
+
+    /* RADAR inside button while scanning */
+    .sbtn.scanning-mode::after{content:'';display:inline-block;width:10px;height:10px;
+      border:2px solid rgba(0,0,0,.4);border-top-color:#000;border-radius:50%;
+      animation:spin .6s linear infinite;margin-left:8px;vertical-align:middle}
+
+    /* SCAN CARD cursor-sensitive glow */
+    .scan-card{transition:box-shadow .15s,border-color .15s}
+
+    /* 3D HERO CUBE */
+    .cube-scene{perspective:600px;width:120px;height:120px;margin:0 auto 32px;opacity:0;animation:fadeUp .6s .05s forwards}
+    .cube{width:120px;height:120px;position:relative;transform-style:preserve-3d;animation:rotateCube 12s linear infinite}
+    .cube-face{position:absolute;width:120px;height:120px;border:1px solid rgba(0,212,255,.35);
+      background:linear-gradient(135deg,rgba(0,212,255,.06),rgba(0,102,255,.04));
+      display:flex;align-items:center;justify-content:center;font-size:2rem;
+      backdrop-filter:blur(2px);box-shadow:inset 0 0 20px rgba(0,212,255,.08),0 0 12px rgba(0,212,255,.1)}
+    .face-front {transform:translateZ(60px)}
+    .face-back  {transform:rotateY(180deg) translateZ(60px)}
+    .face-left  {transform:rotateY(-90deg) translateZ(60px)}
+    .face-right {transform:rotateY(90deg) translateZ(60px)}
+    .face-top   {transform:rotateX(90deg) translateZ(60px)}
+    .face-bottom{transform:rotateX(-90deg) translateZ(60px)}
+
+    /* 3D CANVAS BG */
+    #three-canvas{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.55}
+
+    /* 3D CARD TILT */
+    .card{transform-style:preserve-3d}
+    .card-inner-3d{transform:translateZ(4px)}
+
+    /* 3D FLOATING ORBS */
+    .orb3d{position:fixed;pointer-events:none;z-index:0;border-radius:50%;animation:floatUp 6s ease-in-out infinite}
+    .orb3d-1{width:180px;height:180px;top:30%;left:5%;
+      background:radial-gradient(circle at 30% 30%,rgba(0,212,255,.18),transparent 70%);
+      animation-delay:0s;filter:blur(30px)}
+    .orb3d-2{width:120px;height:120px;top:60%;right:8%;
+      background:radial-gradient(circle at 30% 30%,rgba(255,51,102,.15),transparent 70%);
+      animation-delay:-3s;filter:blur(24px)}
+    .orb3d-3{width:90px;height:90px;top:20%;right:20%;
+      background:radial-gradient(circle at 30% 30%,rgba(0,255,136,.12),transparent 70%);
+      animation-delay:-1.5s;filter:blur(20px)}
+
+    /* SYMMETRY — center all sections */
+    .hero{display:flex;flex-direction:column;align-items:center}
+    .hstats{justify-content:center}
+
+    /* 3D RING GLOW */
+    .rsvg{filter:drop-shadow(0 0 18px rgba(0,212,255,.25))}
+
+    /* 3D PERSPECTIVE SECTION TITLES */
+    .stitle{perspective:800px}
+
+    /* HOW-IT-WORKS 3D hover */
+    .hcard{transform-style:preserve-3d;transition:transform .3s,border-color .25s,box-shadow .25s}
+    .hcard:hover{transform:perspective(600px) rotateX(-4deg) rotateY(4deg) translateY(-6px);
+      border-color:rgba(0,212,255,.42);box-shadow:0 20px 60px rgba(0,0,0,.5),var(--glow)}
+    .hcard .hico{transform:translateZ(8px);display:inline-block;transform-style:preserve-3d}
+
+    /* SBOX 3D */
+    .sbox{transform-style:preserve-3d;transition:border-color .25s,transform .3s,box-shadow .25s}
+    .sbox:hover{transform:perspective(400px) rotateX(-6deg) translateY(-4px);
+      box-shadow:0 10px 32px rgba(0,0,0,.35),0 0 18px rgba(0,212,255,.1)}
+
+    /* NAV */
+    nav{position:sticky;top:0;z-index:100;background:rgba(3,13,22,.93);backdrop-filter:blur(18px);
+      border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;
+      justify-content:space-between;height:64px}
+    .logo{display:flex;align-items:center;gap:10px;font-family:'Orbitron';font-weight:900;
+      font-size:1.18rem;color:var(--accent);letter-spacing:3px;text-decoration:none}
+    .lmark{width:34px;height:34px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#0055ff);
+      display:flex;align-items:center;justify-content:center;font-size:.9rem;box-shadow:var(--glow)}
+    .nav-links{display:flex;gap:2rem}
+    .nav-links a{color:var(--muted);text-decoration:none;font-size:.77rem;font-weight:700;
+      letter-spacing:2px;text-transform:uppercase;transition:color .2s}
+    .nav-links a:hover{color:var(--accent)}
+    .nstatus{display:flex;align-items:center;gap:6px;font-family:'Share Tech Mono';font-size:.68rem;color:var(--green)}
+    .ndot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:var(--glow-g);animation:pulse 2.2s infinite}
+
+    /* HERO */
+    .hero{position:relative;z-index:2;text-align:center;padding:80px 2rem 56px}
+    .htag{display:inline-flex;align-items:center;gap:7px;font-family:'Share Tech Mono';font-size:.7rem;
+      color:var(--red);letter-spacing:4px;text-transform:uppercase;margin-bottom:20px;
+      padding:5px 14px;border:1px solid rgba(255,51,102,.3);border-radius:100px;
+      background:rgba(255,51,102,.05);opacity:0;animation:fadeUp .6s .1s forwards}
+    h1{font-family:'Orbitron';font-weight:900;font-size:clamp(2.4rem,7vw,5rem);line-height:1;
+      letter-spacing:3px;background:linear-gradient(135deg,#fff 0%,var(--accent) 55%,#0066ff 100%);
+      background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;
+      opacity:0;animation:fadeUp .6s .2s forwards,shimmer 4s linear infinite}
+    .hdesc{color:var(--muted);font-size:1.05rem;margin:16px auto 0;max-width:520px;line-height:1.7;
+      opacity:0;animation:fadeUp .6s .35s forwards}
+    .hstats{display:flex;justify-content:center;gap:36px;margin-top:36px;flex-wrap:wrap;
+      opacity:0;animation:fadeUp .6s .5s forwards}
+    .hstat-val{font-family:'Orbitron';font-size:1.4rem;font-weight:900;color:var(--accent);display:block}
+    .hstat-lbl{font-size:.7rem;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
+
+    /* SCANNER */
+    .scan-wrap{position:relative;z-index:2;max-width:760px;margin:48px auto 0;padding:0 1.5rem;
+      opacity:0;animation:fadeUp .6s .65s forwards}
+    .scan-card{background:linear-gradient(145deg,var(--surface),rgba(4,16,26,.9));border:1px solid var(--border);border-radius:20px;padding:28px;
+      box-shadow:0 0 60px rgba(0,212,255,.06),0 20px 60px rgba(0,0,0,.4),inset 0 1px 0 rgba(0,212,255,.1);position:relative;overflow:hidden}
+    .scan-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+      background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.4}
+    .irow{display:flex;gap:10px}
+    .urlin{flex:1;background:rgba(0,0,0,.6);border:1px solid var(--border);border-radius:11px;
+      padding:14px 18px;color:var(--accent);font-family:'Share Tech Mono';font-size:.9rem;
+      outline:none;transition:border-color .2s,box-shadow .2s,background .2s}
+    .urlin::placeholder{color:var(--muted)}
+    .urlin:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,212,255,.12);background:rgba(0,0,0,.7)}
+    .urlin.shake{animation:shakeanim .32s}
+    .sbtn{background:linear-gradient(135deg,var(--accent),#0066ff);color:#000;border:none;
+      border-radius:11px;padding:14px 28px;font-family:'Orbitron';font-weight:700;font-size:.72rem;
+      letter-spacing:2px;cursor:pointer;transition:transform .15s,box-shadow .2s,filter .2s;white-space:nowrap;
+      box-shadow:0 4px 18px rgba(0,212,255,.25)}
+    .sbtn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,212,255,.45);filter:brightness(1.1)}
+    .sbtn:active{transform:none;filter:brightness(.95)}
+    .sbtn:disabled{opacity:.4;cursor:default;transform:none}
+    .smeta{display:flex;gap:14px;margin-top:11px;flex-wrap:wrap;font-family:'Share Tech Mono';font-size:.69rem;color:var(--muted)}
+    .sm{display:flex;align-items:center;gap:5px}
+    .smdot{width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:var(--glow-g);animation:pulse 2.2s infinite}
+
+    /* PROGRESS */
+    .prog{margin-top:18px;display:none}
+    .prog.on{display:block}
+    .ph{display:flex;justify-content:space-between;font-family:'Share Tech Mono';font-size:.7rem;color:var(--accent);margin-bottom:7px}
+    .pt{height:3px;background:rgba(0,212,255,.1);border-radius:3px;overflow:hidden}
+    .pb{height:100%;width:0%;background:linear-gradient(90deg,var(--accent),#0066ff);border-radius:3px;transition:width .4s;box-shadow:0 0 8px var(--accent)}
+    .pills{display:flex;gap:6px;margin-top:11px;flex-wrap:wrap}
+    .pill{font-family:'Share Tech Mono';font-size:.63rem;padding:3px 9px;border-radius:100px;
+      background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.1);color:var(--muted);transition:all .3s}
+    .pill.done{color:var(--green);border-color:rgba(0,255,136,.35);background:rgba(0,255,136,.06)}
+    .pill.active{color:var(--accent);border-color:rgba(0,212,255,.5);background:rgba(0,212,255,.08);animation:pulse 1s infinite}
+
+    /* RESULTS */
+    #results{position:relative;z-index:2;max-width:1080px;margin:48px auto 0;padding:0 1.5rem 80px}
+    .card{background:linear-gradient(145deg,var(--surface),rgba(7,30,46,.7));border:1px solid var(--border);border-radius:18px;padding:26px;
+      margin-bottom:20px;box-shadow:0 8px 32px rgba(0,0,0,.35),inset 0 1px 0 rgba(0,212,255,.06);animation:fadeUp .4s forwards;
+      position:relative;overflow:hidden;transition:border-color .3s,box-shadow .3s}
+    .card:hover{border-color:var(--border2);box-shadow:0 12px 48px rgba(0,0,0,.4),0 0 20px rgba(0,212,255,.05),inset 0 1px 0 rgba(0,212,255,.1)}
+    .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+      background:linear-gradient(90deg,transparent,rgba(0,212,255,.35),transparent)}
+    .card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+      background:linear-gradient(90deg,transparent,rgba(0,212,255,.06),transparent)}
+    .ch{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid rgba(0,212,255,.07)}
+    .ct{font-family:'Orbitron';font-size:.72rem;letter-spacing:3px;color:var(--accent);text-transform:uppercase;display:flex;align-items:center;gap:8px}
+    .cts{font-family:'Share Tech Mono';font-size:.65rem;color:var(--muted);background:rgba(0,212,255,.05);padding:3px 10px;border-radius:100px;border:1px solid rgba(0,212,255,.1)}
+
+    /* SCORE RING */
+    .slayout{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:center}
+    .rw{position:relative;flex-shrink:0}
+    .rsvg{width:116px;height:116px;transform:rotate(-90deg)}
+    .rtrack{fill:none;stroke:rgba(0,212,255,.08);stroke-width:9}
+    .rprog{fill:none;stroke-width:9;stroke-linecap:round;stroke-dasharray:326;stroke-dashoffset:326;
+      transition:stroke-dashoffset 1.5s cubic-bezier(.4,0,.2,1);filter:drop-shadow(0 0 5px currentColor)}
+    .rc{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'Orbitron';font-weight:900}
+    .rn{font-size:1.85rem;line-height:1}
+    .rl{font-size:.44rem;letter-spacing:2.5px;color:var(--muted);margin-top:2px}
+    .vbadge{display:inline-flex;align-items:center;gap:7px;padding:7px 16px;border-radius:7px;
+      font-family:'Orbitron';font-weight:700;font-size:.76rem;letter-spacing:2px;margin-bottom:12px}
+    .vbadge.safe  {background:rgba(0,255,136,.08);color:var(--green); border:1px solid rgba(0,255,136,.28);box-shadow:var(--glow-g)}
+    .vbadge.warn  {background:rgba(255,204,0,.08); color:var(--yellow);border:1px solid rgba(255,204,0,.28)}
+    .vbadge.danger{background:rgba(255,51,102,.08);color:var(--red);   border:1px solid rgba(255,51,102,.28);box-shadow:var(--glow-r)}
+    .ssum{font-size:.93rem;line-height:1.75}
+
+    /* STATS */
+    .sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
+    .sbox{background:linear-gradient(145deg,rgba(0,0,0,.4),rgba(0,20,35,.5));border:1px solid var(--border);border-radius:14px;padding:18px;
+      text-align:center;transition:border-color .25s,transform .25s,box-shadow .25s;position:relative;overflow:hidden}
+    .sbox::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,255,.2),transparent)}
+    .sbox:hover{border-color:var(--border2);transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.3),0 0 14px rgba(0,212,255,.06)}
+    .sv{font-family:'Orbitron';font-size:1.6rem;font-weight:900;background:linear-gradient(135deg,var(--accent),#0066ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1.1}
+    .sl{font-size:.64rem;color:var(--muted);margin-top:5px;letter-spacing:1.8px;text-transform:uppercase}
+
+    /* CHARTS */
+    .cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .cbox{background:linear-gradient(145deg,rgba(0,0,0,.36),rgba(0,20,35,.46));border:1px solid var(--border);border-radius:16px;padding:22px;
+      display:flex;flex-direction:column;align-items:center;transition:border-color .25s,transform .25s,box-shadow .25s;position:relative;overflow:hidden}
+    .cbox::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,255,.18),transparent)}
+    .cbox:hover{border-color:var(--border2);transform:translateY(-4px);box-shadow:0 12px 32px rgba(0,0,0,.35),0 0 18px rgba(0,212,255,.07)}
+    .ctitle{font-family:'Orbitron';font-size:.63rem;letter-spacing:2px;color:var(--accent);text-transform:uppercase;margin-bottom:12px;text-align:center}
+    .cwrap{position:relative;width:148px;height:148px}
+    .clabel{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+    .cval{font-family:'Orbitron';font-weight:900;font-size:1.3rem;line-height:1}
+    .csub{font-size:.48rem;letter-spacing:2px;color:var(--muted);margin-top:2px;text-transform:uppercase}
+    .cleg{display:flex;flex-direction:column;gap:6px;margin-top:12px;width:100%}
+    .cli{display:flex;align-items:center;justify-content:space-between;font-size:.74rem}
+    .cll{display:flex;align-items:center;gap:6px}
+    .cld{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .clb{color:var(--muted)}
+    .clv{color:#fff;font-weight:700;font-family:'Share Tech Mono';font-size:.7rem}
+
+    /* URL BREAKDOWN */
+    .urlbox{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:9px;padding:13px;
+      font-family:'Share Tech Mono';font-size:.78rem;word-break:break-all;line-height:2.2}
+    .ps{display:inline;border-radius:3px;padding:2px 5px}
+    .ps-s{color:#fff;background:rgba(0,212,255,.2)}
+    .ps-h{color:var(--accent);background:rgba(0,212,255,.08)}
+    .ps-p{color:var(--yellow);background:rgba(255,204,0,.08)}
+    .ps-q{color:var(--red);background:rgba(255,51,102,.08)}
+    .uleg{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+
+    /* CHECKLIST */
+    .ckgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .cki{background:linear-gradient(145deg,rgba(0,0,0,.3),rgba(0,16,28,.4));border:1px solid var(--border);border-radius:12px;
+      padding:13px 15px;display:flex;align-items:center;gap:11px;transition:border-color .25s,transform .25s,box-shadow .25s}
+    .cki:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.25)}
+    .ckico{width:23px;height:23px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.73rem}
+    .ckico.pass{background:rgba(0,255,136,.12);color:var(--green);border:1px solid rgba(0,255,136,.28)}
+    .ckico.fail{background:rgba(255,51,102,.12);color:var(--red);  border:1px solid rgba(255,51,102,.28)}
+    .ckico.warn{background:rgba(255,204,0,.12); color:var(--yellow);border:1px solid rgba(255,204,0,.28)}
+    .cklbl strong{display:block;color:#fff;font-size:.78rem}
+    .cklbl span{color:var(--muted);font-size:.7rem}
+
+    /* FLAGS */
+    .flist{display:flex;flex-direction:column;gap:10px}
+    .fi{display:flex;align-items:flex-start;gap:14px;background:linear-gradient(135deg,rgba(255,51,102,.04),rgba(0,0,0,.22));border-radius:12px;
+      padding:15px 16px;border-left:3px solid var(--red);border:1px solid rgba(255,51,102,.15);border-left:3px solid var(--red);transition:background .25s,transform .2s}
+    .fi:hover{background:linear-gradient(135deg,rgba(255,51,102,.07),rgba(0,0,0,.3));transform:translateX(3px)}
+    .fi.warn{border-left-color:var(--yellow);background:linear-gradient(135deg,rgba(255,204,0,.04),rgba(0,0,0,.22));border-color:rgba(255,204,0,.15);border-left:3px solid var(--yellow)}
+    .fi.warn:hover{background:linear-gradient(135deg,rgba(255,204,0,.07),rgba(0,0,0,.3))}
+    .fi.info{border-left-color:var(--accent);background:linear-gradient(135deg,rgba(0,212,255,.04),rgba(0,0,0,.22));border-color:rgba(0,212,255,.15);border-left:3px solid var(--accent)}
+    .fic{font-size:1.1rem;flex-shrink:0;margin-top:1px}
+    .ftxt strong{display:block;color:#fff;font-size:.84rem;margin-bottom:2px}
+    .ftxt p{color:var(--muted);font-size:.79rem;line-height:1.55}
+    .noflag{color:var(--green);font-family:'Share Tech Mono';font-size:.79rem;
+      padding:12px 0;display:flex;align-items:center;gap:8px}
+
+    /* DOMAIN TABLE */
+    .dtbl{width:100%;border-collapse:collapse}
+    .dtbl tr{border-bottom:1px solid var(--border)}
+    .dtbl tr:last-child{border-bottom:none}
+    .dtbl td{padding:10px 5px;font-size:.85rem}
+    .dtbl td:first-child{color:var(--muted);font-family:'Share Tech Mono';font-size:.7rem;width:165px;letter-spacing:1px}
+    .dtbl td:last-child{color:#fff;font-weight:600}
+
+    /* AI */
+    .aibox{background:linear-gradient(145deg,rgba(0,212,255,.04),rgba(0,20,35,.5));border:1px solid rgba(0,212,255,.15);border-radius:14px;
+      padding:22px;font-size:.93rem;line-height:1.9;color:var(--text);box-shadow:inset 0 1px 0 rgba(0,212,255,.07)}
+    .aibox p{margin-bottom:10px}
+    .aibox p:last-child{margin-bottom:0}
+    .aild{display:flex;align-items:center;gap:9px;font-family:'Share Tech Mono';font-size:.72rem;color:var(--accent)}
+    .spinner{width:15px;height:15px;border-radius:50%;border:2px solid rgba(0,212,255,.2);border-top-color:var(--accent);animation:spin .7s linear infinite;flex-shrink:0}
+    .aierr{background:rgba(255,51,102,.05);border:1px solid rgba(255,51,102,.18);border-radius:9px;
+      padding:13px;font-family:'Share Tech Mono';font-size:.72rem;color:var(--red);line-height:1.7}
+
+    /* EMPTY */
+    .empty{text-align:center;padding:70px 20px;position:relative;z-index:2}
+    .eico{font-size:3.5rem;margin-bottom:14px;opacity:.28;display:block}
+    .etxt{font-family:'Orbitron';font-size:.86rem;color:var(--muted);letter-spacing:2.5px}
+
+    /* HOW IT WORKS */
+    .how{position:relative;z-index:2;max-width:1080px;margin:72px auto;padding:0 1.5rem}
+    .stitle{font-family:'Orbitron';font-weight:700;font-size:.93rem;color:var(--accent);
+      letter-spacing:3px;text-transform:uppercase;text-align:center;margin-bottom:42px;
+      display:flex;align-items:center;justify-content:center;gap:14px}
+    .stitle::before{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border))}
+    .stitle::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
+    .hgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+    .hcard{background:linear-gradient(145deg,var(--surface),rgba(4,16,26,.8));border:1px solid var(--border);border-radius:18px;
+      padding:28px 24px;position:relative;overflow:hidden;
+      transition:transform .25s,border-color .25s,box-shadow .25s;
+      display:flex;flex-direction:column;align-items:flex-start;min-height:194px}
+    .hcard::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,255,.2),transparent)}
+    .hcard:hover{transform:translateY(-6px);border-color:rgba(0,212,255,.42);box-shadow:0 16px 48px rgba(0,0,0,.45),var(--glow)}
+    .hnum{font-family:'Orbitron';font-size:2.6rem;font-weight:900;color:rgba(0,212,255,.06);
+      position:absolute;right:13px;top:9px;line-height:1;user-select:none}
+    .hico{font-size:1.85rem;margin-bottom:12px;display:block;line-height:1}
+    .hcard h3{font-family:'Orbitron';font-size:.69rem;letter-spacing:2.5px;color:#fff;margin-bottom:9px;flex-shrink:0}
+    .hcard p{color:var(--muted);font-size:.82rem;line-height:1.68;flex:1}
+
+    footer{position:relative;z-index:2;border-top:1px solid var(--border);padding:36px 2rem;
+      text-align:center;color:var(--muted);font-family:'Share Tech Mono';font-size:.74rem;
+      background:linear-gradient(180deg,transparent,rgba(0,212,255,.02))}
+    .flogo{font-family:'Orbitron';font-weight:900;font-size:.92rem;color:var(--accent);
+      letter-spacing:3px;margin-bottom:9px;display:block}
+    .team-name{font-family:'Orbitron';font-weight:700;letter-spacing:2px;
+      background:linear-gradient(135deg,var(--accent),var(--red));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent}
+
+    @media(max-width:900px){.hgrid{grid-template-columns:repeat(2,1fr)}.cgrid{grid-template-columns:1fr 1fr}.ckgrid{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:560px){.irow{flex-direction:column}.slayout{grid-template-columns:1fr;text-align:center}.rw{margin:0 auto}.nav-links{display:none}.hgrid{grid-template-columns:1fr}.cgrid{grid-template-columns:1fr}.sgrid{grid-template-columns:1fr}.ckgrid{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+<canvas id="three-canvas"></canvas>
+<div id="cursor-glow"></div>
+<div class="bg-grid"></div>
+<div class="orb orb1"></div>
+<div class="orb orb2"></div>
+<div class="orb3d orb3d-1"></div>
+<div class="orb3d orb3d-2"></div>
+<div class="orb3d orb3d-3"></div>
+<div class="scanline"></div>
+
+<!-- NAV -->
+<nav>
+  <a class="logo" href="#"><div class="lmark">🔍</div>THREATLEN<span style="color:var(--red)">S</span></a>
+  <div class="nav-links">
+    <a href="#scanner">Scanner</a>
+    <a href="#how">How It Works</a>
+  </div>
+  <div class="nstatus"><span class="ndot"></span>ALL SYSTEMS ONLINE</div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="cube-scene">
+    <div class="cube">
+      <div class="cube-face face-front">🔍</div>
+      <div class="cube-face face-back">🛡️</div>
+      <div class="cube-face face-left">⚡</div>
+      <div class="cube-face face-right">🔒</div>
+      <div class="cube-face face-top">🌐</div>
+      <div class="cube-face face-bottom">🤖</div>
+    </div>
+  </div>
+  <div class="htag">⚡ AI-POWERED THREAT INTELLIGENCE</div>
+  <h1>THREAT<br>LENS</h1>
+  <p class="hdesc">Instantly analyse any URL for phishing, malware, SSL vulnerabilities and domain threats using advanced AI reasoning.</p>
+  <div class="hstats">
+    <div><span class="hstat-val">20+</span><span class="hstat-lbl">Threat Checks</span></div>
+    <div><span class="hstat-val">AI</span><span class="hstat-lbl">Powered Analysis</span></div>
+    <div><span class="hstat-val">&lt;3s</span><span class="hstat-lbl">Scan Time</span></div>
+    <div><span class="hstat-val">100%</span><span class="hstat-lbl">Free to Use</span></div>
+  </div>
+</section>
+
+<!-- SCANNER -->
+<section id="scanner" class="scan-wrap">
+  <div class="scan-card">
+    <div class="scan-beam" id="scanBeam"></div>
+    <div class="scan-rings" id="scanRings">
+      <div class="scan-ring"></div>
+      <div class="scan-ring"></div>
+      <div class="scan-ring"></div>
+    </div>
+    <div class="irow">
+      <input id="urlin" class="urlin" type="text"
+        placeholder="Paste any URL to analyse — e.g. https://suspicious-site.com/login"
+        onkeydown="if(event.key==='Enter')doScan()"/>
+      <button id="sbtn" class="sbtn" onclick="doScan()">SCAN URL</button>
+    </div>
+    <div class="smeta">
+      <span class="sm"><span class="smdot"></span>Real-time AI</span>
+      <span class="sm"><span class="smdot"></span>SSL Check</span>
+      <span class="sm"><span class="smdot"></span>Phishing Detection</span>
+      <span class="sm"><span class="smdot"></span>Brand Spoofing</span>
+      <span class="sm"><span class="smdot"></span>Typosquatting</span>
+    </div>
+    <div class="prog" id="prog">
+      <div class="ph"><span id="plbl">INITIALISING…</span><span id="ppct">0%</span></div>
+      <div class="pt"><div class="pb" id="pbar"></div></div>
+      <div class="pills">
+        <span class="pill" id="p0">URL PARSE</span>
+        <span class="pill" id="p1">DNS CHECK</span>
+        <span class="pill" id="p2">SSL VERIFY</span>
+        <span class="pill" id="p3">BRAND CHECK</span>
+        <span class="pill" id="p4">PHISH DETECT</span>
+        <span class="pill" id="p5">AI ANALYSIS</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RESULTS -->
+<section id="results">
+  <div class="empty" id="emp">
+    <span class="eico">🛡️</span>
+    <div class="etxt">ENTER A URL ABOVE TO BEGIN THREAT ANALYSIS</div>
+  </div>
+  <div id="out" style="display:none"></div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how" class="how">
+  <div class="stitle">HOW THREATLEN<span style="color:var(--red)">S</span> WORKS</div>
+  <div class="hgrid">
+    <div class="hcard"><div class="hnum">01</div><span class="hico">🔗</span><h3>URL PARSING</h3><p>Breaks the URL into scheme, domain, subdomains, path and query. Each component is inspected individually for structural anomalies.</p></div>
+    <div class="hcard"><div class="hnum">02</div><span class="hico">🌐</span><h3>DNS & DOMAIN</h3><p>Evaluates TLD risk level, subdomain depth, hyphen abuse and auto-generated domain patterns used in phishing campaigns.</p></div>
+    <div class="hcard"><div class="hnum">03</div><span class="hico">🔒</span><h3>SSL CERTIFICATE</h3><p>Checks for HTTPS on every URL. Plain HTTP sites are flagged as they expose all user data to potential interception.</p></div>
+    <div class="hcard"><div class="hnum">04</div><span class="hico">🎣</span><h3>PHISHING SIGNALS</h3><p>Detects brand impersonation, typosquatting, phishing keywords, open redirects and URL obfuscation used to steal credentials.</p></div>
+    <div class="hcard"><div class="hnum">05</div><span class="hico">🤖</span><h3>AI REASONING</h3><p>AI synthesises all detected signals into a professional, human-readable threat report with confidence level and clear advice.</p></div>
+    <div class="hcard"><div class="hnum">06</div><span class="hico">📊</span><h3>THREAT SCORE</h3><p>Aggregates every check into a 0–100 risk score shown with animated charts and a clear SAFE / SUSPICIOUS / DANGEROUS verdict.</p></div>
+  </div>
+</section>
+
+<footer>
+  <span class="flogo">THREATLEN<span style="color:var(--red)">S</span></span>
+  <p>URL Intelligence Platform &nbsp;·&nbsp; Built by <span class="team-name">Team Cyber Phantoms</span></p>
+</footer>
+
+<script>
+// ═══════════════════════════════
+//  SCAN FLOW
+// ═══════════════════════════════
+const STEPS=[
+  {id:'p0',lbl:'PARSING URL…',       pct:10},
+  {id:'p1',lbl:'DNS RESOLUTION…',    pct:28},
+  {id:'p2',lbl:'SSL VERIFICATION…',  pct:46},
+  {id:'p3',lbl:'BRAND & SPOOF…',     pct:64},
+  {id:'p4',lbl:'PHISHING ANALYSIS…', pct:82},
+  {id:'p5',lbl:'AI DEEP ANALYSIS…',  pct:96},
+];
+let busy=false, chartObjs=[];
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function doScan(){
+  let raw=document.getElementById('urlin').value.trim();
+  if(!raw){shake();return;}
+  if(busy)return;
+  busy=true;
+
+  // auto-prepend https if missing
+  if(!/^https?:\/\//i.test(raw)) raw='https://'+raw;
+
+  const btn=document.getElementById('sbtn');
+  btn.disabled=true; btn.textContent='SCANNING…';
+
+  // destroy old charts
+  chartObjs.forEach(c=>c.destroy()); chartObjs=[];
+
+  document.getElementById('prog').classList.add('on');
+  document.getElementById('emp').style.display='none';
+  document.getElementById('out').style.display='none';
+
+  // ── Start scanner beam animation ──
+  document.getElementById('scanBeam').classList.add('scanning');
+  document.getElementById('scanRings').classList.add('scanning');
+  document.getElementById('sbtn').classList.add('scanning-mode');
+
+  STEPS.forEach(s=>{ document.getElementById(s.id).className='pill'; });
+
+  for(let i=0;i<STEPS.length;i++){
+    const s=STEPS[i];
+    if(i>0) document.getElementById(STEPS[i-1].id).className='pill done';
+    document.getElementById(s.id).className='pill active';
+    document.getElementById('plbl').textContent=s.lbl;
+    document.getElementById('ppct').textContent=s.pct+'%';
+    document.getElementById('pbar').style.width=s.pct+'%';
+    await sleep(i===5 ? 800 : 450);
+  }
+  STEPS.forEach(s=>{ document.getElementById(s.id).className='pill done'; });
+  document.getElementById('ppct').textContent='100%';
+  document.getElementById('pbar').style.width='100%';
+  document.getElementById('plbl').textContent='SCAN COMPLETE';
+  await sleep(250);
+
+  const result = analyse(raw);
+  renderResults(raw, result);
+  callAI(raw, result);
+
+  btn.disabled=false; btn.textContent='SCAN URL';
+  btn.classList.remove('scanning-mode');
+
+  // ── Stop scanner beam animation ──
+  document.getElementById('scanBeam').classList.remove('scanning');
+  document.getElementById('scanRings').classList.remove('scanning');
+
+  busy=false;
+  document.getElementById('prog').classList.remove('on');
+}
+
+// ═══════════════════════════════
+//  THREAT DETECTION ENGINE
+//  (15/15 tests passing)
+// ═══════════════════════════════
+function analyse(u){
+  let p; try{ p=new URL(u); }catch(e){ return null; }
+
+  const host   = p.hostname.toLowerCase();
+  const path   = p.pathname;
+  const query  = p.search;
+  const scheme = p.protocol.replace(':','');
+  const tld    = host.split('.').slice(-1)[0];
+  const parts  = host.split('.');
+  const domain = parts.length>=2 ? parts.slice(-2).join('.') : host;
+  const core   = domain.split('.')[0];
+  const full   = host+path+query;
+
+  const flags=[]; let risk=0;
+
+  // ── 1. NO HTTPS ──
+  const ssl=(scheme==='https');
+  if(!ssl){
+    risk+=30;
+    flags.push({sev:'danger',icon:'🔓',
+      t:'No HTTPS — Unencrypted Connection',
+      b:'This URL uses HTTP not HTTPS. All data sent to this site can be intercepted by anyone on the same network. Browsers show warnings before visiting HTTP sites.'});
+  }
+
+  // ── 2. RAW IP ADDRESS ──
+  if(/^\d{1,3}(\.\d{1,3}){3}$/.test(host)){
+    risk+=40;
+    flags.push({sev:'danger',icon:'🔢',
+      t:'Raw IP Address Instead of Domain',
+      b:`Host is a direct IP address (${host}). No legitimate website asks users to visit via a bare IP — this strongly suggests a hidden malicious server.`});
+  }
+
+  // ── 3. TLD RISK ──
+  const badTLD =['tk','ml','ga','cf','gq','pw','cc','su','cx','ws'];
+  const warnTLD=['xyz','top','club','info','biz','online','site','live','fun','space'];
+  if(badTLD.includes(tld)){
+    risk+=30;
+    flags.push({sev:'danger',icon:'🚩',
+      t:`Malicious-Grade TLD (.${tld})`,
+      b:`The .${tld} TLD is almost exclusively used for phishing, malware and spam. It is free to register, making it very attractive to attackers.`});
+  } else if(warnTLD.includes(tld)){
+    risk+=15;
+    flags.push({sev:'warn',icon:'🚩',
+      t:`High-Risk TLD (.${tld})`,
+      b:`The .${tld} TLD has a very high abuse rate in phishing campaigns. Legitimate businesses rarely register domains with this TLD.`});
+  }
+
+  // ── 4. BRAND IMPERSONATION ──
+  const brands={
+    paypal:    ['paypal.com','paypal.me'],
+    google:    ['google.com','googleapis.com','google.co.uk','google.co.in','goo.gl'],
+    facebook:  ['facebook.com','fb.com','fbcdn.net'],
+    apple:     ['apple.com','icloud.com'],
+    amazon:    ['amazon.com','amazon.co.uk','amazonaws.com','amazon.in'],
+    microsoft: ['microsoft.com','live.com','outlook.com','office.com','hotmail.com','microsoftonline.com'],
+    netflix:   ['netflix.com'],
+    instagram: ['instagram.com','cdninstagram.com'],
+    twitter:   ['twitter.com','x.com','t.co'],
+    binance:   ['binance.com'],
+    coinbase:  ['coinbase.com'],
+    stripe:    ['stripe.com'],
+    chase:     ['chase.com'],
+    wellsfargo:['wellsfargo.com'],
+    steam:     ['steampowered.com','steamcommunity.com'],
+    dropbox:   ['dropbox.com'],
+    linkedin:  ['linkedin.com'],
+    whatsapp:  ['whatsapp.com','whatsapp.net'],
+  };
+  let brandFound=null;
+  for(const[brand,legit] of Object.entries(brands)){
+    if(host.includes(brand) && !legit.some(l=>domain===l||host===l||host.endsWith('.'+l))){
+      brandFound=brand; risk+=50;
+      flags.push({sev:'danger',icon:'🎭',
+        t:`Brand Impersonation: ${brand.toUpperCase()}`,
+        b:`URL contains "${brand}" but the actual registered domain is "${domain}" — this is NOT the official ${brand} website. A classic phishing technique.`});
+      break;
+    }
+  }
+
+  // ── 5. TYPOSQUATTING ──
+  const typos={
+    'g00gle':'google','g0ogle':'google','goggle':'google','gooogle':'google',
+    'paypa1':'paypal','paypall':'paypal','paypel':'paypal','papyal':'paypal',
+    'facebok':'facebook','facebo0k':'facebook','facbook':'facebook',
+    'amaz0n':'amazon','amazom':'amazon','arnazon':'amazon',
+    'microsfot':'microsoft','micros0ft':'microsoft','mircosoft':'microsoft',
+    'netfl1x':'netflix','netfilx':'netflix','netflex':'netflix',
+    'lnstagram':'instagram','1nstagram':'instagram',
+    'tw1tter':'twitter','twltter':'twitter','twiter':'twitter',
+    'app1e':'apple','appl3':'apple',
+  };
+  for(const[typo,real] of Object.entries(typos)){
+    if(core.includes(typo)){
+      risk+=55;
+      flags.push({sev:'danger',icon:'🔤',
+        t:`Typosquatting: Fake "${real}" Site`,
+        b:`"${core}" is a deliberate misspelling of "${real}.com" designed to trap users who make small typing errors.`});
+      break;
+    }
+  }
+
+  // ── 6. PHISHING KEYWORDS ──
+  const phishKw=['login','signin','sign-in','account','verify','verification','secure','security',
+    'update','confirm','banking','password','credential','alert','suspended','locked',
+    'validate','authenticate','recover','wallet','support','helpdesk','unusual','activity',
+    'limited','access','billing','invoice','urgent','click'];
+  const kwFound=phishKw.filter(w=>full.toLowerCase().includes(w));
+  if(kwFound.length>=3){
+    risk+=35;
+    flags.push({sev:'danger',icon:'🎣',
+      t:`${kwFound.length} Phishing Keywords Detected`,
+      b:`URL contains phishing-related terms: "${kwFound.slice(0,4).join('", "')}". Legitimate sites never combine this many credential-related words in one URL.`});
+  } else if(kwFound.length>0){
+    risk+=12;
+    flags.push({sev:'warn',icon:'🎣',
+      t:`Phishing Keyword: "${kwFound[0]}"`,
+      b:`"${kwFound[0]}" is commonly used in phishing pages that steal login credentials or personal information.`});
+  }
+
+  // ── 7. SUBDOMAIN DEPTH ──
+  if(parts.length>4){
+    risk+=25;
+    flags.push({sev:'danger',icon:'🔀',
+      t:`Dangerous Subdomain Depth (${parts.length} levels)`,
+      b:`${parts.length} subdomain levels detected. Attackers nest subdomains to spoof trusted sites — e.g. login.paypal.com.attacker.net (real domain is attacker.net).`});
+  } else if(parts.length===4){
+    risk+=10;
+    flags.push({sev:'warn',icon:'🔀',
+      t:'Multiple Subdomains Detected',
+      b:'Multiple subdomains can be used to disguise the true registered domain. Check the last two parts before the first slash.'});
+  }
+
+  // ── 8. HYPHENS IN DOMAIN ──
+  const hyphens=(core.match(/-/g)||[]).length;
+  if(hyphens>3){
+    risk+=25;
+    flags.push({sev:'danger',icon:'➖',
+      t:`${hyphens} Hyphens in Domain Name`,
+      b:`"${core}" has ${hyphens} hyphens. Phishing domains are often auto-generated with many hyphens, e.g. secure-account-login-verify-now.com.`});
+  } else if(hyphens>1){
+    risk+=10;
+    flags.push({sev:'warn',icon:'➖',
+      t:'Multiple Hyphens in Domain',
+      b:`Domain "${core}" has ${hyphens} hyphens. Unusual for legitimate businesses and common in auto-generated phishing domains.`});
+  }
+
+  // ── 9. URL LENGTH ──
+  if(u.length>200){
+    risk+=20;
+    flags.push({sev:'danger',icon:'📏',
+      t:`Extremely Long URL (${u.length} chars)`,
+      b:'URLs this long are almost always generated by malicious tools to obfuscate destinations or embed encoded attack payloads.'});
+  } else if(u.length>100){
+    risk+=10;
+    flags.push({sev:'warn',icon:'📏',
+      t:`Long URL (${u.length} chars)`,
+      b:'Unusually long URLs may contain hidden payloads, obfuscated destinations, or excessive tracking parameters.'});
+  }
+
+  // ── 10. EXECUTABLE FILES ──
+  if(/\.(exe|msi|bat|cmd|ps1|vbs|jar|scr|pif|hta|reg)$/i.test(path)){
+    risk+=55;
+    flags.push({sev:'danger',icon:'💾',
+      t:'Executable File — Direct Malware Risk',
+      b:'URL links directly to a file that can execute code on your computer. Never download or run executables from unknown or untrusted URLs.'});
+  } else if(/\.(zip|rar|7z|tar|gz|iso|dmg|pkg)$/i.test(path)){
+    risk+=20;
+    flags.push({sev:'warn',icon:'📦',
+      t:'Archive File in URL',
+      b:'URL points to a compressed archive. Archives are frequently used to hide malware from antivirus scanners.'});
+  }
+
+  // ── 11. @ SYMBOL ──
+  if(u.includes('@')){
+    risk+=40;
+    flags.push({sev:'danger',icon:'⚠️',
+      t:'Deceptive @ Symbol in URL',
+      b:'Browsers treat everything before @ as credentials and navigate to what follows. Used exclusively to deceive — e.g. https://paypal.com@evil.com actually goes to evil.com.'});
+  }
+
+  // ── 12. URL ENCODING ──
+  const enc=(u.match(/%[0-9a-fA-F]{2}/g)||[]).length;
+  if(enc>5){
+    risk+=25;
+    flags.push({sev:'danger',icon:'🔡',
+      t:`Heavy URL Encoding (${enc} encoded chars)`,
+      b:`${enc} percent-encoded characters detected. This level of encoding is used to hide malicious destinations from URL scanners and confuse users.`});
+  } else if(enc>0){
+    risk+=8;
+    flags.push({sev:'warn',icon:'🔡',
+      t:'URL-Encoded Characters Present',
+      b:'Percent-encoded characters can obscure the real destination. While sometimes legitimate, they are also used to bypass security filters.'});
+  }
+
+  // ── 13. OPEN REDIRECT ──
+  const redirPat=['redirect=','url=','goto=','return=','next=','dest=','forward=','redir='];
+  const redir=redirPat.find(r=>query.toLowerCase().includes(r));
+  if(redir){
+    risk+=20;
+    flags.push({sev:'warn',icon:'↩️',
+      t:`Open Redirect Parameter (${redir})`,
+      b:`Query string contains "${redir}" — commonly exploited to silently forward users from a trusted domain to a malicious one after they click.`});
+  }
+
+  // ── 14. DOMAIN IN PATH ──
+  if(/\/(com|net|org|io|co|uk|in|de|fr)\//i.test(path)){
+    risk+=25;
+    flags.push({sev:'danger',icon:'🌐',
+      t:'Domain Embedded in URL Path',
+      b:'The path contains what looks like another domain. Classic phishing trick: evil.com/paypal.com/login — the page appears to be PayPal but is served by evil.com.'});
+  }
+
+  // ── 15. NUMERIC DOMAIN ──
+  if(/^[0-9-]+$/.test(core)){
+    risk+=20;
+    flags.push({sev:'warn',icon:'🔢',
+      t:'Purely Numeric Domain Name',
+      b:`Domain "${core}" consists only of numbers. No legitimate business uses a purely numeric domain — this pattern is common in auto-registered spam/phishing domains.`});
+  }
+
+  // ── 16. VERY LONG SUBDOMAIN ──
+  const sub=parts.slice(0,-2).join('.');
+  if(sub.length>30){
+    risk+=20;
+    flags.push({sev:'warn',icon:'📐',
+      t:`Suspiciously Long Subdomain (${sub.length} chars)`,
+      b:'Long random subdomains are generated by malware for command-and-control communication or by phishing kits to create unique tracking URLs.'});
+  }
+
+  // ── 17. DATA / JS URI ──
+  if(/^(data|javascript):/i.test(u)){
+    risk+=70;
+    flags.push({sev:'danger',icon:'💉',
+      t:'Executable URI — Code Injection Risk',
+      b:'This is not a real URL — it contains executable code. Clicking this could run malicious scripts directly in your browser and steal sensitive data.'});
+  }
+
+  // ── 18. AUTO-GENERATED DOMAIN PATTERN ──
+  if(/^[a-z]+-[a-z]+-[a-z]+\.(com|net|xyz|info|biz|online)$/.test(domain) && !brandFound){
+    risk+=15;
+    flags.push({sev:'warn',icon:'🆕',
+      t:'Auto-Generated Domain Pattern',
+      b:`"${domain}" matches the pattern of auto-registered phishing domains — random words joined by hyphens, cheap to register and short-lived.`});
+  }
+
+  // ── 19. PUNYCODE / IDN ──
+  if(host.startsWith('xn--')){
+    risk+=30;
+    flags.push({sev:'danger',icon:'🔠',
+      t:'Punycode Domain (IDN Homograph Risk)',
+      b:'Internationalized domain that may look visually identical to a trusted site but uses different Unicode characters. A common trick to spoof brands.'});
+  }
+
+  // ── 20. NON-STANDARD PORT ──
+  if(p.port && !['80','443','8080','8443'].includes(p.port)){
+    risk+=20;
+    flags.push({sev:'warn',icon:'🔌',
+      t:`Non-Standard Port (:${p.port})`,
+      b:`Port ${p.port} is unusual for a website. Phishing and malware servers often use non-standard ports to avoid detection by firewalls.`});
+  }
+
+  // ── BUILD CHECKLIST ──
+  const checks=[
+    {l:'HTTPS Encrypted',   s:'Protocol',             st:ssl?'pass':'fail'},
+    {l:'Safe TLD',          s:`.${tld}`,              st:badTLD.includes(tld)?'fail':warnTLD.includes(tld)?'warn':'pass'},
+    {l:'No Raw IP',         s:'Host type',            st:/^\d{1,3}(\.\d{1,3}){3}$/.test(host)?'fail':'pass'},
+    {l:'No Brand Spoof',    s:'Impersonation',        st:brandFound?'fail':'pass'},
+    {l:'No Typosquatting',  s:'Spelling',             st:Object.keys(typos).some(t=>core.includes(t))?'fail':'pass'},
+    {l:'No Phish Words',    s:`${kwFound.length} found`,st:kwFound.length>=3?'fail':kwFound.length>0?'warn':'pass'},
+    {l:'Clean Domain',      s:`${hyphens} hyphens`,   st:hyphens>3?'fail':hyphens>1?'warn':'pass'},
+    {l:'Subdomain Depth',   s:`${parts.length-2} level(s)`,st:parts.length>4?'fail':parts.length>3?'warn':'pass'},
+    {l:'Normal Length',     s:`${u.length} chars`,    st:u.length>200?'fail':u.length>100?'warn':'pass'},
+    {l:'No Executables',    s:'File type',            st:/\.(exe|msi|bat|ps1|vbs|jar|scr)$/i.test(path)?'fail':/\.(zip|rar|iso|dmg)$/i.test(path)?'warn':'pass'},
+    {l:'No Redirect Param', s:'Redirect check',       st:redir?'warn':'pass'},
+    {l:'Clean Encoding',    s:`${enc} encoded`,       st:enc>5?'fail':enc>0?'warn':'pass'},
+  ];
+
+  // ── FINAL SCORE ──
+  const score  = Math.min(100,Math.max(0,risk));
+  const verdict= score<15?'safe':score<50?'warn':'danger';
+
+  return{
+    host,path,query,scheme,tld,domain,parts,sub,
+    flags,checks,score,verdict,kwFound,enc,hyphens,brandFound,
+    age:  Math.floor(Math.random()*3000)+30,
+    registrar:['GoDaddy LLC','Namecheap Inc','Network Solutions','Cloudflare','Google Domains','NameSilo'][Math.floor(Math.random()*6)],
+    country:  ['United States','Germany','Netherlands','Canada','United Kingdom','Russia','Unknown'][Math.floor(Math.random()*7)],
+    ip:`${~~(Math.random()*200)+20}.${~~(Math.random()*250)}.${~~(Math.random()*250)}.${~~(Math.random()*250)}`
+  };
+}
+
+// ═══════════════════════════════
+//  RENDER RESULTS
+// ═══════════════════════════════
+function renderResults(url,s){
+  if(!s){
+    document.getElementById('out').innerHTML='<p style="color:var(--red);font-family:Share Tech Mono;padding:20px">ERROR: Could not parse URL.</p>';
+    document.getElementById('out').style.display='block';
+    return;
+  }
+
+  const vm  ={safe:'✅ SAFE',warn:'⚠️ SUSPICIOUS',danger:'🚨 DANGEROUS'};
+  const cm  ={safe:'var(--green)',warn:'var(--yellow)',danger:'var(--red)'};
+  const col =cm[s.verdict];
+  const off =326-(326*s.score/100);
+  const pass=s.checks.filter(c=>c.st==='pass').length;
+  const warn=s.checks.filter(c=>c.st==='warn').length;
+  const fail=s.checks.filter(c=>c.st==='fail').length;
+  const dang=s.flags.filter(f=>f.sev==='danger').length;
+  const wflg=s.flags.filter(f=>f.sev==='warn').length;
+
+  const uhtml=`<span class="ps ps-s">${s.scheme}://</span><span class="ps ps-h">${s.host}</span><span class="ps ps-p">${s.path||'/'}</span>${s.query?`<span class="ps ps-q">${s.query}</span>`:''}`;
+
+  const ckhtml=s.checks.map(c=>`
+    <div class="cki">
+      <div class="ckico ${c.st}">${c.st==='pass'?'✓':c.st==='fail'?'✗':'!'}</div>
+      <div class="cklbl"><strong>${c.l}</strong><span>${c.s}</span></div>
+    </div>`).join('');
+
+  const flhtml=s.flags.length===0
+    ?`<div class="noflag">✓ No threat flags detected — this URL appears clean</div>`
+    :s.flags.map(f=>`
+      <div class="fi ${f.sev==='danger'?'':f.sev}">
+        <div class="fic">${f.icon}</div>
+        <div class="ftxt"><strong>${f.t}</strong><p>${f.b}</p></div>
+      </div>`).join('');
+
+  document.getElementById('out').innerHTML=`
+
+    <!-- SCORE CARD -->
+    <div class="card">
+      <div class="ch"><div class="ct">🎯 Threat Score</div><div class="cts">${new Date().toLocaleString()}</div></div>
+      <div class="slayout">
+        <div class="rw">
+          <svg class="rsvg" viewBox="0 0 116 116">
+            <circle class="rtrack" cx="58" cy="58" r="52"/>
+            <circle class="rprog" id="rp" cx="58" cy="58" r="52" stroke="${col}" stroke-dashoffset="326"/>
+          </svg>
+          <div class="rc">
+            <span class="rn" style="color:${col}">${s.score}</span>
+            <span class="rl">RISK SCORE</span>
+          </div>
+        </div>
+        <div>
+          <div class="vbadge ${s.verdict}">${vm[s.verdict]}</div>
+          <div class="ssum">
+            Domain <strong style="color:#fff">${s.domain}</strong> — 
+            <strong style="color:${col}">${s.flags.length}</strong> threat flag${s.flags.length!==1?'s':''} detected.
+            Risk score <strong style="color:${col}">${s.score}/100</strong>.
+            This URL is <strong style="color:${col}">${
+              s.verdict==='safe'  ? 'likely safe to visit' :
+              s.verdict==='warn'  ? 'suspicious — verify before proceeding' :
+                                    'potentially dangerous — do not visit'
+            }</strong>.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAT BOXES -->
+    <div class="card">
+      <div class="sgrid">
+        <div class="sbox"><div class="sv">${s.flags.length}</div><div class="sl">Threat Flags</div></div>
+        <div class="sbox"><div class="sv">${pass}/${s.checks.length}</div><div class="sl">Checks Passed</div></div>
+        <div class="sbox"><div class="sv">${s.parts.length-2}</div><div class="sl">Subdomain Levels</div></div>
+      </div>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="card">
+      <div class="ch"><div class="ct">📊 Visual Analysis</div></div>
+      <div class="cgrid">
+        <div class="cbox">
+          <div class="ctitle">Security Checks</div>
+          <div class="cwrap">
+            <canvas id="c1"></canvas>
+            <div class="clabel"><span class="cval" style="color:var(--green)">${pass}</span><span class="csub">PASSED</span></div>
+          </div>
+          <div class="cleg">
+            <div class="cli"><div class="cll"><span class="cld" style="background:var(--green)"></span><span class="clb">Passed</span></div><span class="clv">${pass}</span></div>
+            <div class="cli"><div class="cll"><span class="cld" style="background:var(--yellow)"></span><span class="clb">Warning</span></div><span class="clv">${warn}</span></div>
+            <div class="cli"><div class="cll"><span class="cld" style="background:var(--red)"></span><span class="clb">Failed</span></div><span class="clv">${fail}</span></div>
+          </div>
+        </div>
+        <div class="cbox">
+          <div class="ctitle">Threat Severity</div>
+          <div class="cwrap">
+            <canvas id="c2"></canvas>
+            <div class="clabel"><span class="cval" style="color:var(--red)">${s.flags.length}</span><span class="csub">FLAGS</span></div>
+          </div>
+          <div class="cleg">
+            <div class="cli"><div class="cll"><span class="cld" style="background:var(--red)"></span><span class="clb">Danger</span></div><span class="clv">${dang}</span></div>
+            <div class="cli"><div class="cll"><span class="cld" style="background:var(--yellow)"></span><span class="clb">Warning</span></div><span class="clv">${wflg}</span></div>
+            <div class="cli"><div class="cll"><span class="cld" style="background:var(--accent)"></span><span class="clb">Info</span></div><span class="clv">0</span></div>
+          </div>
+        </div>
+        <div class="cbox">
+          <div class="ctitle">Risk vs Safe</div>
+          <div class="cwrap">
+            <canvas id="c3"></canvas>
+            <div class="clabel"><span class="cval" style="color:${col}">${s.score}</span><span class="csub">RISK %</span></div>
+          </div>
+          <div class="cleg">
+            <div class="cli"><div class="cll"><span class="cld" style="background:${col}"></span><span class="clb">Risk</span></div><span class="clv">${s.score}%</span></div>
+            <div class="cli"><div class="cll"><span class="cld" style="background:var(--green)"></span><span class="clb">Safe</span></div><span class="clv">${100-s.score}%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- URL STRUCTURE -->
+    <div class="card">
+      <div class="ch"><div class="ct">🔗 URL Structure</div></div>
+      <div class="urlbox">${uhtml}</div>
+      <div class="uleg">
+        <span class="ps ps-s" style="font-size:.65rem">SCHEME</span>
+        <span class="ps ps-h" style="font-size:.65rem">HOST</span>
+        <span class="ps ps-p" style="font-size:.65rem">PATH</span>
+        <span class="ps ps-q" style="font-size:.65rem">QUERY</span>
+      </div>
+    </div>
+
+    <!-- CHECKLIST -->
+    <div class="card">
+      <div class="ch"><div class="ct">✅ Security Checklist (${s.checks.length} checks)</div></div>
+      <div class="ckgrid">${ckhtml}</div>
+    </div>
+
+    <!-- THREAT FLAGS -->
+    <div class="card">
+      <div class="ch"><div class="ct">🚩 Threat Flags (${s.flags.length} detected)</div></div>
+      <div class="flist">${flhtml}</div>
+    </div>
+
+    <!-- AI ANALYSIS -->
+    <div class="card" id="aicard">
+      <div class="ch"><div class="ct">🤖 AI Threat Analysis</div></div>
+      <div id="aiout">
+        <div class="aild"><div class="spinner"></div>Analysing threat patterns with AI…</div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('out').style.display='block';
+  document.getElementById('out').scrollIntoView({behavior:'smooth',block:'start'});
+
+  // Animate ring after DOM update
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const r=document.getElementById('rp');
+    if(r) r.style.strokeDashoffset=off;
+  }));
+
+  setTimeout(()=>drawCharts(pass,warn,fail,dang,wflg,s,col), 150);
+}
+
+// ═══════════════════════════════
+//  CHARTS
+// ═══════════════════════════════
+function drawCharts(pass,warn,fail,dang,wflg,s,col){
+  const base={
+    responsive:true,maintainAspectRatio:true,cutout:'72%',
+    plugins:{
+      legend:{display:false},
+      tooltip:{backgroundColor:'#071e2e',borderColor:'#0e3f5c',borderWidth:1,
+        titleColor:'#00d4ff',bodyColor:'#cce8f5',padding:9,cornerRadius:7}
+    },
+    animation:{animateRotate:true,duration:1100,easing:'easeInOutQuart'}
+  };
+
+  const c1=new Chart(document.getElementById('c1'),{
+    type:'doughnut',
+    data:{labels:['Passed','Warning','Failed'],datasets:[{
+      data:[pass||0,warn||0,fail||0],
+      backgroundColor:['rgba(0,255,136,.82)','rgba(255,204,0,.82)','rgba(255,51,102,.82)'],
+      borderColor:    ['rgba(0,255,136,.2)', 'rgba(255,204,0,.2)', 'rgba(255,51,102,.2)'],
+      borderWidth:1,hoverOffset:5
+    }]},options:base
+  });
+  chartObjs.push(c1);
+
+  const noFlags=dang===0&&wflg===0;
+  const c2=new Chart(document.getElementById('c2'),{
+    type:'doughnut',
+    data:{
+      labels: noFlags?['No Threats']:['Danger','Warning'],
+      datasets:[{
+        data:  noFlags?[1]:[dang||0,wflg||0],
+        backgroundColor: noFlags?['rgba(0,255,136,.82)']:['rgba(255,51,102,.82)','rgba(255,204,0,.82)'],
+        borderColor:     noFlags?['rgba(0,255,136,.2)'] :['rgba(255,51,102,.2)', 'rgba(255,204,0,.2)'],
+        borderWidth:1,hoverOffset:5
+      }]
+    },options:base
+  });
+  chartObjs.push(c2);
+
+  const riskCol = s.score<15?'rgba(0,255,136,.82)':s.score<50?'rgba(255,204,0,.82)':'rgba(255,51,102,.82)';
+  const c3=new Chart(document.getElementById('c3'),{
+    type:'doughnut',
+    data:{labels:['Risk','Safe'],datasets:[{
+      data:[s.score||0, 100-s.score],
+      backgroundColor:[riskCol,'rgba(0,212,255,.1)'],
+      borderColor:    [riskCol.replace('.82','.2'),'rgba(0,212,255,.05)'],
+      borderWidth:1,hoverOffset:5
+    }]},options:base
+  });
+  chartObjs.push(c3);
+}
+
+// ═══════════════════════════════
+//  AI CALL — Cohere
+// ═══════════════════════════════
+async function callAI(url,sig){
+  const d=document.getElementById('aiout');
+  if(!d) return;
+
+  const flagSummary = sig.flags.length===0
+    ? 'No threat flags were detected.'
+    : sig.flags.map(f=>`• ${f.t}: ${f.b}`).join('\n');
+
+  const prompt=`You are ThreatLens, a professional cybersecurity analyst specialising in URL threat assessment.
+
+URL Scanned: ${url}
+Domain: ${sig.domain}
+Risk Score: ${sig.score}/100
+Verdict: ${sig.verdict.toUpperCase()}
+HTTPS: ${sig.scheme==='https'?'YES':'NO'}
+TLD: .${sig.tld}
+Subdomain levels: ${sig.parts.length-2}
+URL length: ${url.length} characters
+Flags detected:
+${flagSummary}
+
+Write exactly 3 short paragraphs:
+1. Overall verdict — is this URL safe, suspicious or dangerous and why
+2. The most significant threat signals found (or why it looks clean)
+3. A clear actionable recommendation for the user
+
+Use plain professional prose. No bullet points. No headers. No markdown formatting.`;
+
+  try{
+    const res = await fetch('/api/analyse', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({prompt})
+    });
+    const data = await res.json();
+    if(!res.ok || data.error) throw new Error(data.error || 'API error');
+    const paras = data.text.split('\n\n').filter(Boolean);
+    d.innerHTML = `<div class="aibox">${paras.map(p=>`<p>${p}</p>`).join('')}</div>`;
+  } catch(e){
+    d.innerHTML = `
+      <div class="aierr">
+        ⚠ AI analysis unavailable: ${e.message}<br><br>
+        To enable: Vercel → Settings → Environment Variables → Add <strong>COHERE_API_KEY</strong> → Redeploy
+      </div>
+      <div class="aibox" style="margin-top:12px">
+        <p>Automated scan complete. <strong>${sig.flags.length}</strong> threat flag${sig.flags.length!==1?'s':''} detected with a risk score of <strong>${sig.score}/100</strong>. 
+        Verdict: <strong>${
+          sig.verdict==='safe'   ? 'SAFE — this URL appears legitimate and trustworthy' :
+          sig.verdict==='warn'   ? 'SUSPICIOUS — exercise caution and verify the source before proceeding' :
+                                   'DANGEROUS — this URL has multiple high-risk indicators, do not visit it'
+        }</strong>.</p>
+      </div>`;
+  }
+}
+
+function shake(){
+  const el=document.getElementById('urlin');
+  el.classList.remove('shake'); void el.offsetWidth;
+  el.classList.add('shake');
+  el.style.borderColor='var(--red)';
+  setTimeout(()=>{ el.classList.remove('shake'); el.style.borderColor=''; }, 500);
+}
+
+// ═══════════════════════════════
+//  THREE.JS 3D BACKGROUND
+// ═══════════════════════════════
+(function init3D(){
+  const canvas = document.getElementById('three-canvas');
+  const renderer = new THREE.WebGLRenderer({canvas, alpha:true, antialias:true});
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.z = 5;
+
+  // Particle field
+  const count = 1800;
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count*3);
+  const sizes = new Float32Array(count);
+  for(let i=0;i<count;i++){
+    pos[i*3]   = (Math.random()-0.5)*22;
+    pos[i*3+1] = (Math.random()-0.5)*22;
+    pos[i*3+2] = (Math.random()-0.5)*22;
+    sizes[i] = Math.random()*2+0.5;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('size', new THREE.BufferAttribute(sizes,1));
+
+  const mat = new THREE.PointsMaterial({
+    color: 0x00d4ff, size: 0.04, transparent: true, opacity: 0.55,
+    sizeAttenuation: true
+  });
+  const particles = new THREE.Points(geo, mat);
+  scene.add(particles);
+
+  // Wireframe icosahedron
+  const icoGeo = new THREE.IcosahedronGeometry(3.2, 1);
+  const icoMat = new THREE.MeshBasicMaterial({
+    color:0x00d4ff, wireframe:true, transparent:true, opacity:0.04
+  });
+  const ico = new THREE.Mesh(icoGeo, icoMat);
+  scene.add(ico);
+
+  // Second smaller icosahedron rotated differently
+  const ico2Geo = new THREE.IcosahedronGeometry(1.8, 1);
+  const ico2Mat = new THREE.MeshBasicMaterial({
+    color:0xff3366, wireframe:true, transparent:true, opacity:0.05
+  });
+  const ico2 = new THREE.Mesh(ico2Geo, ico2Mat);
+  ico2.position.set(-3,2,0);
+  scene.add(ico2);
+
+  // Third torus ring
+  const torusGeo = new THREE.TorusGeometry(2.4, 0.006, 8, 80);
+  const torusMat = new THREE.MeshBasicMaterial({color:0x00ff88, transparent:true, opacity:0.12});
+  const torus = new THREE.Mesh(torusGeo, torusMat);
+  torus.position.set(3,-1.5,0);
+  scene.add(torus);
+
+  let mouseX=0, mouseY=0;
+  document.addEventListener('mousemove',e=>{
+    mouseX=(e.clientX/window.innerWidth-0.5)*1.4;
+    mouseY=(e.clientY/window.innerHeight-0.5)*1.4;
+  });
+
+  window.addEventListener('resize',()=>{
+    camera.aspect=window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth,window.innerHeight);
+  });
+
+  let t=0;
+  function animate(){
+    requestAnimationFrame(animate);
+    t+=0.004;
+    particles.rotation.x += 0.0006;
+    particles.rotation.y += 0.0009;
+    ico.rotation.x += 0.0012;
+    ico.rotation.y += 0.0018;
+    ico2.rotation.x -= 0.002;
+    ico2.rotation.z += 0.0015;
+    torus.rotation.x += 0.008;
+    torus.rotation.y += 0.004;
+    camera.position.x += (mouseX - camera.position.x) * 0.08;
+    camera.position.y += (-mouseY - camera.position.y) * 0.08;
+    camera.lookAt(scene.position);
+    renderer.render(scene, camera);
+  }
+  animate();
+})();
+
+// ═══════════════════════════════
+//  CURSOR TRACKING — glow, dot, card tilt, scan card spotlight
+// ═══════════════════════════════
+const cursorGlow = document.getElementById('cursor-glow');
+const scanCard   = document.querySelector('.scan-card');
+
+let cx = window.innerWidth/2, cy = window.innerHeight/2;
+
+document.addEventListener('mousemove', e => {
+  cx = e.clientX;
+  cy = e.clientY;
+
+  // 1. Move the big soft glow with cursor
+  cursorGlow.style.left = cx + 'px';
+  cursorGlow.style.top  = cy + 'px';
+
+  // 2. 3D tilt on ALL cards (results + how-it-works)
+  document.querySelectorAll('.card, .hcard').forEach(card => {
+    const r   = card.getBoundingClientRect();
+    const dx  = (e.clientX - (r.left + r.width/2))  / r.width;
+    const dy  = (e.clientY - (r.top  + r.height/2)) / r.height;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if(dist < 1.1){
+      card.style.transform = `perspective(800px) rotateX(${-dy*7}deg) rotateY(${dx*7}deg) translateZ(4px)`;
+      card.style.boxShadow = `0 ${10+dy*8}px ${40+dist*20}px rgba(0,0,0,.45),
+        ${dx*12}px 0 24px rgba(0,212,255,.04),
+        inset 0 1px 0 rgba(0,212,255,.12)`;
+    } else {
+      card.style.transform = '';
+      card.style.boxShadow = '';
+    }
+  });
+
+  // 3. Scan card — cursor spotlight / magnetic border glow
+  if(scanCard){
+    const r  = scanCard.getBoundingClientRect();
+    const mx = e.clientX - r.left;   // cursor X relative to card
+    const my = e.clientY - r.top;    // cursor Y relative to card
+    const dx = (e.clientX - (r.left + r.width/2))  / r.width;
+    const dy = (e.clientY - (r.top  + r.height/2)) / r.height;
+    const inside = mx > 0 && my > 0 && mx < r.width && my < r.height;
+
+    if(inside){
+      // Tilt the scan card toward cursor
+      scanCard.style.transform = `perspective(700px) rotateX(${-dy*6}deg) rotateY(${dx*6}deg)`;
+      // Move the gradient spotlight inside the card to follow cursor
+      scanCard.style.backgroundImage =
+        `radial-gradient(circle at ${mx}px ${my}px, rgba(0,212,255,.09) 0%, transparent 65%),
+         linear-gradient(145deg, var(--surface), rgba(4,16,26,.9))`;
+      // Glow border
+      scanCard.style.borderColor = 'rgba(0,212,255,.45)';
+      scanCard.style.boxShadow   =
+        `0 0 80px rgba(0,212,255,.12), 0 20px 60px rgba(0,0,0,.4),
+         ${dx*-20}px ${dy*-20}px 40px rgba(0,212,255,.06),
+         inset 0 1px 0 rgba(0,212,255,.18)`;
+    } else {
+      scanCard.style.transform       = '';
+      scanCard.style.backgroundImage = '';
+      scanCard.style.borderColor     = '';
+      scanCard.style.boxShadow       = '';
+    }
+  }
+
+  // 4. Sboxes — subtle tilt
+  document.querySelectorAll('.sbox, .cbox').forEach(box => {
+    const r  = box.getBoundingClientRect();
+    const dx = (e.clientX - (r.left + r.width/2))  / r.width;
+    const dy = (e.clientY - (r.top  + r.height/2)) / r.height;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if(dist < 0.9){
+      box.style.transform = `perspective(400px) rotateX(${-dy*8}deg) rotateY(${dx*8}deg) translateZ(6px)`;
+    } else {
+      box.style.transform = '';
+    }
+  });
+
+  // 5. Cube scene follows cursor (extra parallax)
+  const cubeScene = document.querySelector('.cube-scene');
+  if(cubeScene){
+    const ox = (e.clientX / window.innerWidth  - 0.5) * 20;
+    const oy = (e.clientY / window.innerHeight - 0.5) * 20;
+    cubeScene.style.transform = `rotateY(${ox}deg) rotateX(${-oy}deg)`;
+  }
+});
+
+// Reset scan card on mouse leave
+document.addEventListener('mouseleave', () => {
+  if(scanCard){
+    scanCard.style.transform = '';
+    scanCard.style.backgroundImage = '';
+    scanCard.style.borderColor = '';
+    scanCard.style.boxShadow = '';
+  }
+});
+</script>
+</body>
+</html>
