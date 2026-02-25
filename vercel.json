@@ -1,29 +1,21 @@
 {
   "version": 2,
-
-  "comment": "This file tells Vercel how to deploy your project.",
-
   "builds": [
     {
-      "comment": "Build 1: Serve everything in the /public folder as static files (HTML, CSS, images etc.)",
       "src": "public/**",
       "use": "@vercel/static"
     },
     {
-      "comment": "Build 2: Run every .js file inside /api as a serverless function (backend code)",
       "src": "api/**/*.js",
       "use": "@vercel/node"
     }
   ],
-
   "routes": [
     {
-      "comment": "Route 1: Any request to /api/* goes to the matching file in our /api folder",
       "src": "/api/(.*)",
       "dest": "/api/$1"
     },
     {
-      "comment": "Route 2: Everything else (/, /about, etc.) serves the main index.html page",
       "src": "/(.*)",
       "dest": "/public/index.html"
     }
