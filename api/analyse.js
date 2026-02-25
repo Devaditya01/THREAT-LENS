@@ -1,5 +1,4 @@
 export default async function handler(request, response) {
-  // Only allow POST requests
   if (request.method !== "POST") {
     return response.status(405).json({ error: "Method not allowed" });
   }
@@ -26,13 +25,8 @@ export default async function handler(request, response) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "command-r-plus",
-        messages: [
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
+        model: "command-r-plus-08-2024",
+        messages: [{ role: "user", content: prompt }],
         max_tokens: 500
       })
     });
@@ -45,8 +39,6 @@ export default async function handler(request, response) {
       });
     }
 
-    // Cohere v2 /chat response: data.message.content is an array of blocks
-    // Each block has a "type" ("text") and "text" field
     let text = null;
 
     if (data.message?.content) {
@@ -54,13 +46,9 @@ export default async function handler(request, response) {
       if (textBlock) text = textBlock.text;
     }
 
-    // Fallback for v1-style responses
-    if (!text && data.text) {
-      text = data.text;
-    }
+    if (!text && data.text) text = data.text;
 
     if (!text) {
-      // Return the raw response shape so you can debug it
       return response.status(500).json({
         error: "No text found in Cohere response",
         debug: JSON.stringify(data).slice(0, 500)
