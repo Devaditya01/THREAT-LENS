@@ -70,12 +70,6 @@ A:
 
 ---
 
-## 💡 Beginner Tips
-
-- **Never** put your API key directly in `index.html` — users could steal it!
-- The `api/` folder is special — Vercel automatically turns every `.js` file in it into a backend endpoint
-- `vercel.json` is the "instruction manual" that tells Vercel what to do with your files
-- `package.json` is like a shopping list of tools your project needs
 
 ---
 
