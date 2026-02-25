@@ -1,42 +1,77 @@
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+export default async function handler(request, response) {
+  // Only allow POST requests
+  if (request.method !== "POST") {
+    return response.status(405).json({ error: "Method not allowed" });
+  }
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { prompt } = request.body;
+
+  if (!prompt) {
+    return response.status(400).json({ error: "No prompt provided" });
+  }
 
   const apiKey = process.env.COHERE_API_KEY;
+
   if (!apiKey) {
-    return res.status(500).json({ error: 'COHERE_API_KEY not set in Vercel Environment Variables' });
+    return response.status(500).json({
+      error: "COHERE_API_KEY environment variable not configured"
+    });
   }
 
   try {
-    const { prompt } = req.body;
-
-    const response = await fetch('https://api.cohere.com/v2/chat', {
-      method: 'POST',
+    const cohereResponse = await fetch("https://api.cohere.com/v2/chat", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: 'command-r-plus-08-2024',
-        messages: [{ role: 'user', content: prompt }],
-        max_tokens: 1000
+        model: "command-r-plus",
+        messages: [
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        max_tokens: 500
       })
     });
 
-    const data = await response.json();
+    const data = await cohereResponse.json();
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: data.message || 'Cohere API error' });
+    if (!cohereResponse.ok) {
+      return response.status(500).json({
+        error: `Cohere API error: ${data.message || data.error || JSON.stringify(data)}`
+      });
     }
 
-    const text = data.message?.content?.[0]?.text || 'No response generated.';
-    return res.status(200).json({ text });
+    // Cohere v2 /chat response: data.message.content is an array of blocks
+    // Each block has a "type" ("text") and "text" field
+    let text = null;
 
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+    if (data.message?.content) {
+      const textBlock = data.message.content.find(block => block.type === "text");
+      if (textBlock) text = textBlock.text;
+    }
+
+    // Fallback for v1-style responses
+    if (!text && data.text) {
+      text = data.text;
+    }
+
+    if (!text) {
+      // Return the raw response shape so you can debug it
+      return response.status(500).json({
+        error: "No text found in Cohere response",
+        debug: JSON.stringify(data).slice(0, 500)
+      });
+    }
+
+    return response.status(200).json({ text });
+
+  } catch (error) {
+    return response.status(500).json({
+      error: `Server error: ${error.message}`
+    });
   }
 }
